@@ -10,9 +10,10 @@ class ExtendedNCA(NCA):
     
     Supports different neighborhood configurations:
     - 3x3 (8 neighbors) - standard (uses parent class)
+    - 4x4 (12 neighbors) - extended
     - 5x5 (24 neighbors) - extended
+    - 6x6 (32 neighbors) - very extended
     - 7x7 (48 neighbors) - very extended
-    - 9x9 (80 neighbors) - ultra extended
     - Custom configurations
     """
     def __init__(self, update_net, state_dim=16, hidden_dim=128, dropout=0, 
@@ -77,6 +78,16 @@ class ExtendedNCA(NCA):
                 sobel_y = torch.tensor([[-1, -2, -1],
                                       [0, 0, 0],
                                       [1, 2, 1]], dtype=torch.float32).to(device)
+            elif kernel_size == 4:
+                # Extended 4x4 Sobel
+                sobel_x = torch.tensor([[-1, -1, 1, 1],
+                                      [-2, -2, 2, 2],
+                                      [-2, -2, 2, 2],
+                                      [-1, -1, 1, 1]], dtype=torch.float32).to(device)
+                sobel_y = torch.tensor([[-1, -2, -2, -1],
+                                      [-1, -2, -2, -1],
+                                      [1, 2, 2, 1],
+                                      [1, 2, 2, 1]], dtype=torch.float32).to(device)
             elif kernel_size == 5:
                 # Extended 5x5 Sobel
                 sobel_x = torch.tensor([[-1, -2, 0, 2, 1],
@@ -89,6 +100,20 @@ class ExtendedNCA(NCA):
                                       [0, 0, 0, 0, 0],
                                       [2, 4, 2, 2, 2],
                                       [1, 2, 1, 1, 1]], dtype=torch.float32).to(device)
+            elif kernel_size == 6:
+                # Extended 6x6 Sobel
+                sobel_x = torch.tensor([[-1, -2, -2, 2, 2, 1],
+                                      [-2, -4, -4, 4, 4, 2],
+                                      [-2, -4, -4, 4, 4, 2],
+                                      [-2, -4, -4, 4, 4, 2],
+                                      [-1, -2, -2, 2, 2, 1],
+                                      [-1, -2, -2, 2, 2, 1]], dtype=torch.float32).to(device)
+                sobel_y = torch.tensor([[-1, -2, -2, -2, -1, -1],
+                                      [-2, -4, -4, -4, -2, -2],
+                                      [-2, -4, -4, -4, -2, -2],
+                                      [2, 4, 4, 4, 2, 2],
+                                      [2, 4, 4, 4, 2, 2],
+                                      [1, 2, 2, 2, 1, 1]], dtype=torch.float32).to(device)
             elif kernel_size == 7:
                 # Extended 7x7 Sobel
                 sobel_x = torch.tensor([[-1, -2, -3, 0, 3, 2, 1],
@@ -120,6 +145,12 @@ class ExtendedNCA(NCA):
                 laplacian = torch.tensor([[1, 1, 1],
                                         [1, -8, 1],
                                         [1, 1, 1]], dtype=torch.float32).to(device)
+            elif kernel_size == 4:
+                # Extended 4x4 Laplacian
+                laplacian = torch.tensor([[1, 1, 1, 1],
+                                        [1, 1, 1, 1],
+                                        [1, 1, -12, 1],
+                                        [1, 1, 1, 1]], dtype=torch.float32).to(device)
             elif kernel_size == 5:
                 # Extended 5x5 Laplacian
                 laplacian = torch.tensor([[1, 1, 1, 1, 1],
@@ -127,6 +158,14 @@ class ExtendedNCA(NCA):
                                         [1, 1, -24, 1, 1],
                                         [1, 1, 1, 1, 1],
                                         [1, 1, 1, 1, 1]], dtype=torch.float32).to(device)
+            elif kernel_size == 6:
+                # Extended 6x6 Laplacian
+                laplacian = torch.tensor([[1, 1, 1, 1, 1, 1],
+                                        [1, 1, 1, 1, 1, 1],
+                                        [1, 1, 1, 1, 1, 1],
+                                        [1, 1, 1, -32, 1, 1],
+                                        [1, 1, 1, 1, 1, 1],
+                                        [1, 1, 1, 1, 1, 1]], dtype=torch.float32).to(device)
             elif kernel_size == 7:
                 # Extended 7x7 Laplacian
                 laplacian = torch.tensor([[1, 1, 1, 1, 1, 1, 1],

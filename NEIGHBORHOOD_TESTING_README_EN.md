@@ -6,16 +6,17 @@ This feature extends Neural Cellular Automata (NCA) to support neighborhoods lar
 
 - `ExtendedNCA` EXTENDS `NCA` and only adds support for `neighborhood_size > 3`, reusing all the base logic (forward, masks, residual, alive mask, etc.).
 - `ExtendedMixtureNCA` EXTENDS `MixtureNCA`, keeping the original mixture logic and only adding extended perception filters.
-- Extended perception filters for Sobel and Laplacian with 5x5, 7x7, 9x9 kernels (identity center, extended derivatives), with dynamic padding.
+- Extended perception filters for Sobel and Laplacian with 4x4, 5x5, 6x6, 7x7 kernels (identity center, extended derivatives), with dynamic padding.
 - New test and training scripts: quick, improved, proper training, extended training.
 - Updated `experiments/neighborhood_experiment.py` to support `--use_mixture`, `--num_rules`, `--neighborhood_sizes`, `--total_steps`.
 
 ## Supported Neighborhood Configurations
 
 - **3x3**: 8 neighbors (standard) — original configuration
+- **4x4**: 12 neighbors (extended)
 - **5x5**: 24 neighbors (extended)
+- **6x6**: 32 neighbors (very extended)
 - **7x7**: 48 neighbors (very extended)
-- **9x9**: 80 neighbors (ultra extended)
 
 ## Main Files
 
@@ -39,7 +40,7 @@ This feature extends Neural Cellular Automata (NCA) to support neighborhoods lar
 
 ### Added API
 
-- `neighborhood_size: int` (default 3). Typical values: 3, 5, 7, 9. Controls perception kernel size and padding.
+- `neighborhood_size: int` (default 3). Typical values: 3, 4, 5, 6, 7. Controls perception kernel size and padding.
 - Supported filters: `filter_type` in {"sobel", "laplacian"}, as in the base classes.
 
 ## How to Use
@@ -55,7 +56,7 @@ python quick_neighborhood_test.py
 cd experiments
 # Extended NCA
 python neighborhood_experiment.py --category 0 --data_dir ../data \
-  --neighborhood_sizes 3 5 7 --total_steps 200
+  --neighborhood_sizes 4 5 6 7 --total_steps 200
 
 # Extended Mixture (e.g., 2 rules, 5x5 neighborhood)
 python neighborhood_experiment.py --category 0 --data_dir ../data \
@@ -70,7 +71,7 @@ jupyter notebook neighborhood_configuration_test.ipynb
 
 ## Key Parameters
 
-- `neighborhood_size`: Neighborhood size (3, 5, 7, 9, ...)
+- `neighborhood_size`: Neighborhood size (3, 4, 5, 6, 7, ...)
 - `filter_type`: Filter type ("sobel" or "laplacian")
 - `state_dim`: State size (default: 16)
 - `hidden_dim`: Hidden size (default: 64)
@@ -90,10 +91,10 @@ jupyter notebook neighborhood_configuration_test.ipynb
 ### Evidence from Included Tests
 
 - No-training tests: not indicative (similar losses across configurations) → proper training is required.
-- Proper training (`proper_training_test.py`): 3x3 generalizes best; 5x5 and 7x7 unstable; 9x9 tends to overfit.
-- Extended training (`extended_training_test.py`): confirms 3x3 as best on average; 9x9 works but is more sensitive; 5x5 and 7x7 remain unstable with the current filters.
+- Proper training (`proper_training_test.py`): 3x3 generalizes best; 4x4, 5x5, 6x6, and 7x7 can be unstable depending on the pattern.
+- Extended training (`extended_training_test.py`): confirms 3x3 as best on average; larger neighborhoods (4x4, 5x5, 6x6, 7x7) work but may require more regularization.
 
-In short: 3x3 remains a strong baseline; larger neighborhoods are useful for complex patterns but require more regularization/care.
+In short: 3x3 remains a strong baseline; larger neighborhoods (4x4, 5x5, 6x6, 7x7) are useful for complex patterns but require more regularization/care.
 
 ## Usage Examples
 
@@ -110,11 +111,20 @@ model = ExtendedNCA(
     neighborhood_size=5,  # 5x5 neighborhood
     device='cuda'
 )
+
+# Or create a 4x4 or 6x6 neighborhood NCA
+model_4x4 = ExtendedNCA(
+    update_net=standard_update_net(16 * 3, 64, 16 * 2, device='cuda'),
+    state_dim=16,
+    hidden_dim=64,
+    neighborhood_size=4,  # 4x4 neighborhood
+    device='cuda'
+)
 ```
 
 ### Compare Different Configurations
 ```python
-neighborhood_sizes = [3, 5, 7, 9]
+neighborhood_sizes = [3, 4, 5, 6, 7]
 results = {}
 
 for size in neighborhood_sizes:
@@ -139,8 +149,8 @@ for size in neighborhood_sizes:
 3. **Stability**: Variance of the last steps (lower = more stable)
 
 ### Recommendations
-- **Simple patterns**: Use 3x3 or 5x5 neighborhoods
-- **Complex patterns**: Use 7x7 or 9x9 neighborhoods
+- **Simple patterns**: Use 3x3 or 4x4 neighborhoods
+- **Complex patterns**: Use 5x5, 6x6, or 7x7 neighborhoods
 - **Balance**: Try multiple configurations to find the optimal trade-off
 
 ## Troubleshooting
