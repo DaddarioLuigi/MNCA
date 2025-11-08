@@ -69,6 +69,16 @@ class ExtendedMixtureNCA(MixtureNCA):
                 sobel_y = torch.tensor([[-1, -2, -1],
                                       [0, 0, 0],
                                       [1, 2, 1]], dtype=torch.float32).to(device)
+            elif kernel_size == 4:
+                # Extended 4x4 Sobel
+                sobel_x = torch.tensor([[-1, -1, 1, 1],
+                                      [-2, -2, 2, 2],
+                                      [-2, -2, 2, 2],
+                                      [-1, -1, 1, 1]], dtype=torch.float32).to(device)
+                sobel_y = torch.tensor([[-1, -2, -2, -1],
+                                      [-1, -2, -2, -1],
+                                      [1, 2, 2, 1],
+                                      [1, 2, 2, 1]], dtype=torch.float32).to(device)
             elif kernel_size == 5:
                 # Extended 5x5 Sobel
                 sobel_x = torch.tensor([[-1, -2, 0, 2, 1],
@@ -81,6 +91,20 @@ class ExtendedMixtureNCA(MixtureNCA):
                                       [0, 0, 0, 0, 0],
                                       [2, 4, 2, 2, 2],
                                       [1, 2, 1, 1, 1]], dtype=torch.float32).to(device)
+            elif kernel_size == 6:
+                # Extended 6x6 Sobel
+                sobel_x = torch.tensor([[-1, -2, -2, 2, 2, 1],
+                                      [-2, -4, -4, 4, 4, 2],
+                                      [-2, -4, -4, 4, 4, 2],
+                                      [-2, -4, -4, 4, 4, 2],
+                                      [-1, -2, -2, 2, 2, 1],
+                                      [-1, -2, -2, 2, 2, 1]], dtype=torch.float32).to(device)
+                sobel_y = torch.tensor([[-1, -2, -2, -2, -1, -1],
+                                      [-2, -4, -4, -4, -2, -2],
+                                      [-2, -4, -4, -4, -2, -2],
+                                      [2, 4, 4, 4, 2, 2],
+                                      [2, 4, 4, 4, 2, 2],
+                                      [1, 2, 2, 2, 1, 1]], dtype=torch.float32).to(device)
             elif kernel_size == 7:
                 # Extended 7x7 Sobel
                 sobel_x = torch.tensor([[-1, -2, -3, 0, 3, 2, 1],
@@ -112,6 +136,12 @@ class ExtendedMixtureNCA(MixtureNCA):
                 laplacian = torch.tensor([[1, 1, 1],
                                         [1, -8, 1],
                                         [1, 1, 1]], dtype=torch.float32).to(device)
+            elif kernel_size == 4:
+                # Extended 4x4 Laplacian
+                laplacian = torch.tensor([[1, 1, 1, 1],
+                                        [1, 1, 1, 1],
+                                        [1, 1, -12, 1],
+                                        [1, 1, 1, 1]], dtype=torch.float32).to(device)
             elif kernel_size == 5:
                 # Extended 5x5 Laplacian
                 laplacian = torch.tensor([[1, 1, 1, 1, 1],
@@ -119,6 +149,14 @@ class ExtendedMixtureNCA(MixtureNCA):
                                         [1, 1, -24, 1, 1],
                                         [1, 1, 1, 1, 1],
                                         [1, 1, 1, 1, 1]], dtype=torch.float32).to(device)
+            elif kernel_size == 6:
+                # Extended 6x6 Laplacian
+                laplacian = torch.tensor([[1, 1, 1, 1, 1, 1],
+                                        [1, 1, 1, 1, 1, 1],
+                                        [1, 1, 1, 1, 1, 1],
+                                        [1, 1, 1, -32, 1, 1],
+                                        [1, 1, 1, 1, 1, 1],
+                                        [1, 1, 1, 1, 1, 1]], dtype=torch.float32).to(device)
             elif kernel_size == 7:
                 # Extended 7x7 Laplacian
                 laplacian = torch.tensor([[1, 1, 1, 1, 1, 1, 1],

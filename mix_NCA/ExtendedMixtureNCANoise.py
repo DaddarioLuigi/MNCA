@@ -68,6 +68,16 @@ class ExtendedMixtureNCANoise(MixtureNCANoise):
                 sobel_y = torch.tensor([[-1, -2, -1],
                                        [0, 0, 0],
                                        [1, 2, 1]], dtype=torch.float32).to(device)
+            elif kernel_size == 4:
+                # Extended 4x4 Sobel
+                sobel_x = torch.tensor([[-1, -1, 1, 1],
+                                       [-2, -2, 2, 2],
+                                       [-2, -2, 2, 2],
+                                       [-1, -1, 1, 1]], dtype=torch.float32).to(device)
+                sobel_y = torch.tensor([[-1, -2, -2, -1],
+                                       [-1, -2, -2, -1],
+                                       [1, 2, 2, 1],
+                                       [1, 2, 2, 1]], dtype=torch.float32).to(device)
             elif kernel_size == 5:
                 sobel_x = torch.tensor([[-1, -2, 0, 2, 1],
                                        [-2, -4, 0, 4, 2],
@@ -79,6 +89,20 @@ class ExtendedMixtureNCANoise(MixtureNCANoise):
                                        [0, 0, 0, 0, 0],
                                        [2, 4, 2, 2, 2],
                                        [1, 2, 1, 1, 1]], dtype=torch.float32).to(device)
+            elif kernel_size == 6:
+                # Extended 6x6 Sobel
+                sobel_x = torch.tensor([[-1, -2, -2, 2, 2, 1],
+                                       [-2, -4, -4, 4, 4, 2],
+                                       [-2, -4, -4, 4, 4, 2],
+                                       [-2, -4, -4, 4, 4, 2],
+                                       [-1, -2, -2, 2, 2, 1],
+                                       [-1, -2, -2, 2, 2, 1]], dtype=torch.float32).to(device)
+                sobel_y = torch.tensor([[-1, -2, -2, -2, -1, -1],
+                                       [-2, -4, -4, -4, -2, -2],
+                                       [-2, -4, -4, -4, -2, -2],
+                                       [2, 4, 4, 4, 2, 2],
+                                       [2, 4, 4, 4, 2, 2],
+                                       [1, 2, 2, 2, 1, 1]], dtype=torch.float32).to(device)
             elif kernel_size == 7:
                 sobel_x = torch.tensor([[-1, -2, -3, 0, 3, 2, 1],
                                        [-2, -4, -6, 0, 6, 4, 2],
@@ -95,7 +119,7 @@ class ExtendedMixtureNCANoise(MixtureNCANoise):
                                        [2, 4, 6, 2, 2, 2, 2],
                                        [1, 2, 3, 1, 1, 1, 1]], dtype=torch.float32).to(device)
             else:
-                raise ValueError(f"Unsupported kernel size for sobel: {kernel_size}")
+                raise ValueError(f"Unsupported kernel size for sobel: {kernel_size}. Supported: 3, 4, 5, 6, 7")
 
             self.register_buffer('sobel_x_kernel',
                 sobel_x.unsqueeze(0).unsqueeze(0).repeat(self.state_dim, 1, 1, 1))
@@ -107,12 +131,26 @@ class ExtendedMixtureNCANoise(MixtureNCANoise):
                 laplacian = torch.tensor([[1, 1, 1],
                                           [1, -8, 1],
                                           [1, 1, 1]], dtype=torch.float32).to(device)
+            elif kernel_size == 4:
+                # Extended 4x4 Laplacian
+                laplacian = torch.tensor([[1, 1, 1, 1],
+                                          [1, 1, 1, 1],
+                                          [1, 1, -12, 1],
+                                          [1, 1, 1, 1]], dtype=torch.float32).to(device)
             elif kernel_size == 5:
                 laplacian = torch.tensor([[1, 1, 1, 1, 1],
                                           [1, 1, 1, 1, 1],
                                           [1, 1, -24, 1, 1],
                                           [1, 1, 1, 1, 1],
                                           [1, 1, 1, 1, 1]], dtype=torch.float32).to(device)
+            elif kernel_size == 6:
+                # Extended 6x6 Laplacian
+                laplacian = torch.tensor([[1, 1, 1, 1, 1, 1],
+                                          [1, 1, 1, 1, 1, 1],
+                                          [1, 1, 1, 1, 1, 1],
+                                          [1, 1, 1, -32, 1, 1],
+                                          [1, 1, 1, 1, 1, 1],
+                                          [1, 1, 1, 1, 1, 1]], dtype=torch.float32).to(device)
             elif kernel_size == 7:
                 laplacian = torch.tensor([[1, 1, 1, 1, 1, 1, 1],
                                           [1, 1, 1, 1, 1, 1, 1],
@@ -122,7 +160,7 @@ class ExtendedMixtureNCANoise(MixtureNCANoise):
                                           [1, 1, 1, 1, 1, 1, 1],
                                           [1, 1, 1, 1, 1, 1, 1]], dtype=torch.float32).to(device)
             else:
-                raise ValueError(f"Unsupported kernel size for laplacian: {kernel_size}")
+                raise ValueError(f"Unsupported kernel size for laplacian: {kernel_size}. Supported: 3, 4, 5, 6, 7")
 
             self.register_buffer('laplacian_kernel',
                 laplacian.unsqueeze(0).unsqueeze(0).repeat(self.state_dim, 1, 1, 1))

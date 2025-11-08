@@ -366,7 +366,7 @@ if __name__ == "__main__":
     parser.add_argument('--category', type=int, required=True)
     parser.add_argument('--output_dir', type=str, default='results_extended')
     parser.add_argument('--data_dir', type=str, required=True)
-    parser.add_argument('--neighborhood_sizes', type=str, default='3,5,7', help='Comma-separated list, e.g. 3,5,7')
+    parser.add_argument('--neighborhood_sizes', type=str, default='4,5,6,7', help='Comma-separated list, e.g. 4,5,6,7')
     parser.add_argument('--quick', action='store_true')
     parser.add_argument('--total_steps', type=int, default=None)
     parser.add_argument('--print_every', type=int, default=None)
@@ -378,8 +378,8 @@ if __name__ == "__main__":
 
     sizes = [int(s.strip()) for s in args.neighborhood_sizes.split(',') if s.strip()]
     for s in sizes:
-        if s not in (3, 5, 7):
-            raise ValueError(f"Unsupported neighborhood size: {s}. Supported: 3,5,7")
+        if s not in (4, 5, 6, 7):
+            raise ValueError(f"Unsupported neighborhood size: {s}. Supported: 4,5,6,7")
 
     # Defaults
     total_steps = 8000
