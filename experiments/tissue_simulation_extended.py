@@ -15,9 +15,36 @@ from mix_NCA.BiologicalMetrics import compare_generated_distributions
 from mix_NCA.TissueModel import ComplexCellType
 
 
+def get_device(device_preference="auto"):
+    """
+    Get the best available device.
+    
+    Args:
+        device_preference: "auto", "cuda", "mps", or "cpu"
+    
+    Returns:
+        str: Device string ("cuda", "mps", or "cpu")
+    """
+    if device_preference == "auto":
+        if torch.cuda.is_available():
+            return "cuda"
+        elif hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+            return "mps"
+        else:
+            return "cpu"
+    elif device_preference == "cuda" and torch.cuda.is_available():
+        return "cuda"
+    elif device_preference == "mps" and hasattr(torch.backends, 'mps') and torch.backends.mps.is_available():
+        return "mps"
+    else:
+        if device_preference not in ("cpu", "cuda", "mps", "auto"):
+            print(f"Warning: Unknown device '{device_preference}', falling back to 'cpu'")
+        return "cpu"
+
+
 def run_experiment(histories_path, output_dir, neighborhood_sizes,
                    n_epochs=800, time_length=35, update_every=1,
-                   n_cell_types=6, device="cuda", n_evaluations=10):
+                   n_cell_types=6, device="auto", n_evaluations=10):
     """
     Train and evaluate NCA models with different neighborhood sizes on biological simulations
     
@@ -29,9 +56,13 @@ def run_experiment(histories_path, output_dir, neighborhood_sizes,
         time_length: Length of training window
         update_every: Steps between updates
         n_cell_types: Number of cell types
-        device: Computing device
+        device: Computing device ("auto", "cuda", "mps", or "cpu")
         n_evaluations: Number of evaluations for stochastic models
     """
+    # Auto-detect best device if needed
+    device = get_device(device)
+    print(f"Using device: {device}")
+    
     # Load histories
     print(f"Loading histories from {histories_path}...")
     histories = np.load(histories_path, allow_pickle=True)
@@ -65,8 +96,20 @@ def run_experiment(histories_path, output_dir, neighborhood_sizes,
         
         # Create models with extended neighborhood
         print("Initializing models...")
+        
+        # Create a wrapper function that passes device to classification_update_net
+        # MixtureNCA calls update_nets with: (state_dim * input_mult, hidden_dim, state_dim, device)
+        # We need to accept all 4 arguments but only pass the first 3 to classification_update_net
+        def make_update_net_fn(device):
+            def update_net_wrapper(n_channels, hidden_dims=128, n_channels_out=None, device_arg=None):
+                # device_arg is passed by MixtureNCA but we use the device from closure
+                return classification_update_net(n_channels, hidden_dims, n_channels_out, device=device)
+            return update_net_wrapper
+        
+        update_net_fn = make_update_net_fn(device)
+        
         nca = ExtendedNCA(
-            update_net=classification_update_net(6 * 3, n_channels_out=6),
+            update_net=classification_update_net(6 * 3, n_channels_out=6, device=device),
             hidden_dim=HIDDEN_DIM,
             maintain_seed=False,
             use_alive_mask=False,
@@ -78,7 +121,7 @@ def run_experiment(histories_path, output_dir, neighborhood_sizes,
         
         # NCA with noise (GCA - Gaussian Cellular Automata)
         nca_with_noise = ExtendedNCA(
-            update_net=classification_update_net(6 * 3, n_channels_out=6 * 2),
+            update_net=classification_update_net(6 * 3, n_channels_out=6 * 2, device=device),
             hidden_dim=HIDDEN_DIM,
             maintain_seed=False,
             use_alive_mask=False,
@@ -91,7 +134,7 @@ def run_experiment(histories_path, output_dir, neighborhood_sizes,
         nca_with_noise.random_updates = True
         
         mix_nca = ExtendedMixtureNCA(
-            update_nets=classification_update_net,
+            update_nets=update_net_fn,
             hidden_dim=HIDDEN_DIM,
             maintain_seed=False,
             use_alive_mask=False,
@@ -104,7 +147,7 @@ def run_experiment(histories_path, output_dir, neighborhood_sizes,
         )
         
         stochastic_mix_nca = ExtendedMixtureNCANoise(
-            update_nets=classification_update_net,
+            update_nets=update_net_fn,
             hidden_dim=HIDDEN_DIM,
             maintain_seed=False,
             use_alive_mask=False,
@@ -271,8 +314,8 @@ if __name__ == "__main__":
                         help='Steps between updates')
     parser.add_argument('--n_cell_types', type=int, default=6,
                         help='Number of cell types')
-    parser.add_argument('--device', type=str, default='cuda',
-                        help='Computing device (cuda or cpu)')
+    parser.add_argument('--device', type=str, default='auto',
+                        help='Computing device (auto, cuda, mps, or cpu). "auto" will select the best available device.')
     parser.add_argument('--n_evaluations', type=int, default=10,
                         help='Number of evaluations for stochastic models')
     args = parser.parse_args()
