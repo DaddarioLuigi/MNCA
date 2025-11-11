@@ -1,6 +1,8 @@
 import torch
 import numpy as np
-import matplotlib.pyplot as plt
+import plotly.graph_objects as go
+from plotly.subplots import make_subplots
+import plotly.express as px
 
 class RobustnessAnalysis:
     def __init__(self, standard_nca, mixture_nca, stochastic_mixture_nca, device="cuda"):
@@ -190,13 +192,6 @@ class RobustnessAnalysis:
     def visualize_stored_results(self, results, plot_type='both', ax=None, figsize=(20, 14), replicate = 0):
         """Visualize results with clear separation between labels and images"""
         if plot_type in ['trajectories', 'both']:
-            # Create figure with GridSpec
-            fig = plt.figure(figsize=figsize)
-
-            gs = plt.GridSpec(3, 5, width_ratios=[0.4, 1, 1, 1, 1], 
-                             hspace=0.4, wspace=0.3,
-                             left=0.05, right=0.95, top=0.9, bottom=0.1)
-            
             # Define models in consistent order with clear labels
             model_data = [
                 (results['standard_recovery'], 'Standard NCA', '#1f77b4'),
@@ -207,35 +202,50 @@ class RobustnessAnalysis:
             # Get stored trajectories
             perturbed_state = results['perturbed_state']
             
-            # Add main title
-            fig.suptitle(f'Recovery from {results["perturbation_type"]} perturbation', 
-                        fontsize=14, fontweight='bold', y=0.95)
+            # Create subplots: 3 rows (models) x 5 columns (1 label + 4 images)
+            fig = make_subplots(
+                rows=3, cols=5,
+                subplot_titles=['', 'Original', 'Perturbed', 'Mid Recovery', 'Final',
+                               '', '', '', '', '',
+                               '', '', '', '', ''],
+                horizontal_spacing=0.05,
+                vertical_spacing=0.1,
+                column_widths=[0.15, 0.2125, 0.2125, 0.2125, 0.2125],
+                specs=[[{"type": "xy"}, {"type": "xy"}, {"type": "xy"}, {"type": "xy"}, {"type": "xy"}],
+                       [{"type": "xy"}, {"type": "xy"}, {"type": "xy"}, {"type": "xy"}, {"type": "xy"}],
+                       [{"type": "xy"}, {"type": "xy"}, {"type": "xy"}, {"type": "xy"}, {"type": "xy"}]]
+            )
             
-            # Column titles
-            titles = ['Original', 'Perturbed', 'Mid Recovery', 'Final']
-            for col, title in enumerate(titles):
-                ax = fig.add_subplot(gs[0, col+1])
-                ax.set_title(title, pad=20, fontsize=12, fontweight='bold')
-                ax.axis('off')
+            # Update layout
+            fig.update_layout(
+                title=dict(
+                    text=f'Recovery from {results["perturbation_type"]} perturbation',
+                    x=0.5,
+                    font=dict(size=16, family='Arial Black')
+                ),
+                height=figsize[1] * 80,  # Convert inches to pixels approximately
+                width=figsize[0] * 80,
+                showlegend=False
+            )
             
             # Plot for all three models
-            for row, (recovery, label, color) in enumerate(model_data):
-                # Create label column with minimal box
-                label_ax = fig.add_subplot(gs[row, 0])
-                label_ax.text(0.5, 0.5, label,
-                             horizontalalignment='center',
-                             verticalalignment='center',
-                             fontsize=12,
-                             fontweight='bold',
-                             transform=label_ax.transAxes,
-                             bbox=dict(
-                                 facecolor=color,
-                                 alpha=0.2,
-                                 edgecolor=color,
-                                 pad=3,  # Minimal padding
-                                 boxstyle='round,pad=0.2'  # Minimal round corners
-                             ))
-                label_ax.axis('off')
+            for row, (recovery, label, color) in enumerate(model_data, 1):
+                # Add label as annotation in first column
+                rgb_color = px.colors.hex_to_rgb(color)
+                fig.add_annotation(
+                    text=label,
+                    xref=f"x{1 + (row-1)*5}",
+                    yref=f"y{1 + (row-1)*5}",
+                    x=0.5, y=0.5,
+                    xanchor='center',
+                    yanchor='middle',
+                    showarrow=False,
+                    font=dict(size=12, family='Arial Black', color=color),
+                    bgcolor=f"rgba({rgb_color[0]}, {rgb_color[1]}, {rgb_color[2]}, 0.2)",
+                    bordercolor=color,
+                    borderwidth=2,
+                    borderpad=3
+                )
                 
                 # Create image plots
                 images = [
@@ -245,17 +255,42 @@ class RobustnessAnalysis:
                     self.to_rgb(recovery[-1, replicate])  # Final
                 ]
                 
-                for col, img in enumerate(images):
-                    ax = fig.add_subplot(gs[row, col+1])
-                    ax.imshow(img.permute(1,2,0))
-                    ax.axis('off')
-                    ax.set_ylabel('')
+                for col, img in enumerate(images, 2):  # Start from column 2 (skip label column)
+                    # Convert tensor to numpy array for plotting
+                    img_np = img.permute(1, 2, 0).cpu().numpy()
+                    img_np = (img_np * 255).astype(np.uint8)
+                    
+                    # For RGB images, convert to grayscale for heatmap visualization
+                    # (Plotly doesn't support RGB images directly in subplots)
+                    # Using weighted grayscale conversion for better visualization
+                    if img_np.shape[2] == 3:
+                        # Standard RGB to grayscale conversion weights
+                        img_gray = (0.299 * img_np[:, :, 0] + 
+                                   0.587 * img_np[:, :, 1] + 
+                                   0.114 * img_np[:, :, 2]).astype(np.uint8)
+                    else:
+                        img_gray = img_np.mean(axis=2).astype(np.uint8)
+                    
+                    # Add image as heatmap
+                    fig.add_trace(
+                        go.Heatmap(
+                            z=img_gray,
+                            colorscale='gray',
+                            showscale=False,
+                            hoverinfo='skip'
+                        ),
+                        row=row, col=col
+                    )
             
-            return fig, ax
+            # Hide axes for all subplots
+            for row in range(1, 4):
+                for col in range(1, 6):
+                    fig.update_xaxes(showticklabels=False, showgrid=False, row=row, col=col)
+                    fig.update_yaxes(showticklabels=False, showgrid=False, row=row, col=col)
+            
+            return fig, None
 
         if plot_type in ['error', 'both']:
-            fig = plt.figure(figsize=figsize)
-
             # Get recovery errors
             std_errors = np.array([m['recovery_error'] for m in results['standard_metrics']])
             mix_errors = np.array([m['recovery_error'] for m in results['mixture_metrics']])
@@ -267,9 +302,9 @@ class RobustnessAnalysis:
                 (mix_errors, 'Mixture NCA', 'red'),
                 (stoch_errors, 'Stochastic Mixture NCA', 'green')
             ]
-
-            if ax is None:
-                ax = fig.gca()
+            
+            # Create Plotly figure
+            fig = go.Figure()
             
             # Plot all three models in consistent order
             for errors, label, color in model_errors:
@@ -277,16 +312,46 @@ class RobustnessAnalysis:
                 std = np.std(errors, axis=0).squeeze()
                 steps = np.arange(len(mean))
                 
-                ax.plot(steps, mean, label=label, color=color, alpha=0.8)
-                ax.fill_between(steps, mean-std, mean+std, color=color, alpha=0.2)
+                # Add mean line
+                fig.add_trace(go.Scatter(
+                    x=steps,
+                    y=mean,
+                    mode='lines',
+                    name=label,
+                    line=dict(color=color, width=2),
+                    opacity=0.8
+                ))
+                
+                # Add confidence band
+                fig.add_trace(go.Scatter(
+                    x=np.concatenate([steps, steps[::-1]]),
+                    y=np.concatenate([mean + std, (mean - std)[::-1]]),
+                    fill='toself',
+                    fillcolor=color,
+                    line=dict(color='rgba(255,255,255,0)'),
+                    showlegend=False,
+                    hoverinfo="skip",
+                    opacity=0.2
+                ))
             
-            ax.set_xlabel('Time Step')
-            ax.set_ylabel('Recovery Error')
-            ax.set_title(f'Recovery from {results["perturbation_type"]} perturbation')
-            ax.legend()
-            ax.grid(True, alpha=0.3)
+            fig.update_layout(
+                title=f'Recovery from {results["perturbation_type"]} perturbation',
+                xaxis_title='Time Step',
+                yaxis_title='Recovery Error',
+                yaxis_type='log',
+                width=figsize[0] * 80,
+                height=figsize[1] * 80,
+                hovermode='x unified',
+                template='plotly_white',
+                legend=dict(
+                    yanchor="top",
+                    y=0.99,
+                    xanchor="left",
+                    x=0.01
+                )
+            )
             
-            return fig, ax
+            return fig, None
 
     def print_summary_statistics(self, results):
         """Print summary statistics for all three models"""
@@ -315,16 +380,54 @@ class RobustnessAnalysis:
         mix_errors = np.mean([m['recovery_error'] for m in mixture_metrics], axis=0)
         stoch_errors = np.mean([m['recovery_error'] for m in stochastic_metrics], axis=0)
         
-        plt.figure(figsize=(10, 5))
-        plt.plot(std_errors, label='Standard NCA', alpha=0.8)
-        plt.plot(mix_errors, label='Mixture NCA', alpha=0.8)
-        plt.plot(stoch_errors, label='Stochastic Mixture NCA', alpha=0.8)
-        plt.xlabel('Time Step')
-        plt.ylabel('Recovery Error')
-        plt.title(f'Recovery from {perturbation_type} perturbation')
-        plt.legend()
-        plt.grid(True, alpha=0.3)
-        plt.show() 
+        # Create Plotly figure
+        fig = go.Figure()
+        
+        fig.add_trace(go.Scatter(
+            x=np.arange(len(std_errors)),
+            y=std_errors,
+            mode='lines',
+            name='Standard NCA',
+            line=dict(color='blue', width=2),
+            opacity=0.8
+        ))
+        
+        fig.add_trace(go.Scatter(
+            x=np.arange(len(mix_errors)),
+            y=mix_errors,
+            mode='lines',
+            name='Mixture NCA',
+            line=dict(color='red', width=2),
+            opacity=0.8
+        ))
+        
+        fig.add_trace(go.Scatter(
+            x=np.arange(len(stoch_errors)),
+            y=stoch_errors,
+            mode='lines',
+            name='Stochastic Mixture NCA',
+            line=dict(color='green', width=2),
+            opacity=0.8
+        ))
+        
+        fig.update_layout(
+            title=f'Recovery from {perturbation_type} perturbation',
+            xaxis_title='Time Step',
+            yaxis_title='Recovery Error',
+            yaxis_type='log',
+            width=800,
+            height=400,
+            hovermode='x unified',
+            template='plotly_white',
+            legend=dict(
+                yanchor="top",
+                y=0.99,
+                xanchor="left",
+                x=0.01
+            )
+        )
+        
+        fig.show() 
 
     def to_rgb(self, x):
         """Convert RGBA tensor to RGB"""

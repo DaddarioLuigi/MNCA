@@ -1,7 +1,7 @@
 import torch
 import numpy as np
 from PIL import Image
-import matplotlib.pyplot as plt
+import plotly.graph_objects as go
 import requests
 import os
 import json
@@ -186,15 +186,53 @@ def run_experiment(emoji_code, output_dir, neighborhood_sizes,
                 'mixture_noise': loss_gmix['loss']
             }, f)
 
-        plt.figure(figsize=(10, 5))
-        plt.plot(loss_nca['loss'], label='Standard NCA')
-        plt.plot(loss_mix_nca['loss'], label='Mixture NCA')
-        plt.plot(loss_gmix['loss'], label='Stochastic Mixture NCA')
-        plt.legend()
-        plt.yscale('log')
-        plt.title(f'Training Loss - nb {nb_size}')
-        plt.savefig(os.path.join(exp_dir, 'training_loss.png'))
-        plt.close()
+        # Create Plotly figure for training loss
+        fig = go.Figure()
+        
+        fig.add_trace(go.Scatter(
+            x=list(range(len(loss_nca['loss']))),
+            y=loss_nca['loss'],
+            mode='lines',
+            name='Standard NCA',
+            line=dict(color='blue', width=2)
+        ))
+        
+        fig.add_trace(go.Scatter(
+            x=list(range(len(loss_mix_nca['loss']))),
+            y=loss_mix_nca['loss'],
+            mode='lines',
+            name='Mixture NCA',
+            line=dict(color='red', width=2)
+        ))
+        
+        fig.add_trace(go.Scatter(
+            x=list(range(len(loss_gmix['loss']))),
+            y=loss_gmix['loss'],
+            mode='lines',
+            name='Stochastic Mixture NCA',
+            line=dict(color='green', width=2)
+        ))
+        
+        fig.update_layout(
+            title=f'Training Loss - nb {nb_size}',
+            xaxis_title='Step',
+            yaxis_title='Loss',
+            yaxis_type='log',
+            width=800,
+            height=400,
+            hovermode='x unified',
+            template='plotly_white',
+            legend=dict(
+                yanchor="top",
+                y=0.99,
+                xanchor="left",
+                x=0.01
+            )
+        )
+        
+        # Save as HTML and PNG
+        fig.write_html(os.path.join(exp_dir, 'training_loss.html'))
+        fig.write_image(os.path.join(exp_dir, 'training_loss.png'))
 
         # Robustness analysis
         init_state = target.to(DEVICE)
@@ -226,20 +264,20 @@ def run_experiment(emoji_code, output_dir, neighborhood_sizes,
             with open(os.path.join(exp_dir, f'deletion_{size}.pkl'), 'wb') as f:
                 pickle.dump(deletion_results[size], f)
 
-            fig, ax = robustness_analysis.visualize_stored_results(
+            fig, _ = robustness_analysis.visualize_stored_results(
                 results=deletion_results[size],
                 plot_type='error',
                 figsize=(10, 5)
             )
-            fig.savefig(os.path.join(exp_dir, f'deletion_error_{size}.png'))
-            plt.close()
+            fig.write_html(os.path.join(exp_dir, f'deletion_error_{size}.html'))
+            fig.write_image(os.path.join(exp_dir, f'deletion_error_{size}.png'))
 
-            fig, ax = robustness_analysis.visualize_stored_results(
+            fig, _ = robustness_analysis.visualize_stored_results(
                 results=deletion_results[size],
                 plot_type='trajectories'
             )
-            fig.savefig(os.path.join(exp_dir, f'deletion_trajectories_{size}.png'))
-            plt.close()
+            fig.write_html(os.path.join(exp_dir, f'deletion_trajectories_{size}.html'))
+            fig.write_image(os.path.join(exp_dir, f'deletion_trajectories_{size}.png'))
 
         noise_levels = [0.1, 0.25]
         noise_results = {}
@@ -256,20 +294,20 @@ def run_experiment(emoji_code, output_dir, neighborhood_sizes,
             with open(os.path.join(exp_dir, f'noise_{noise_level}.pkl'), 'wb') as f:
                 pickle.dump(noise_results[noise_level], f)
 
-            fig, ax = robustness_analysis.visualize_stored_results(
+            fig, _ = robustness_analysis.visualize_stored_results(
                 results=noise_results[noise_level],
                 plot_type='error',
                 figsize=(10, 5)
             )
-            fig.savefig(os.path.join(exp_dir, f'noise_error_{noise_level}.png'))
-            plt.close()
+            fig.write_html(os.path.join(exp_dir, f'noise_error_{noise_level}.html'))
+            fig.write_image(os.path.join(exp_dir, f'noise_error_{noise_level}.png'))
 
-            fig, ax = robustness_analysis.visualize_stored_results(
+            fig, _ = robustness_analysis.visualize_stored_results(
                 results=noise_results[noise_level],
                 plot_type='trajectories'
             )
-            fig.savefig(os.path.join(exp_dir, f'noise_trajectories_{noise_level}.png'))
-            plt.close()
+            fig.write_html(os.path.join(exp_dir, f'noise_trajectories_{noise_level}.html'))
+            fig.write_image(os.path.join(exp_dir, f'noise_trajectories_{noise_level}.png'))
 
         pixel_counts = [100, 500]
         results = {}
@@ -291,15 +329,15 @@ def run_experiment(emoji_code, output_dir, neighborhood_sizes,
                 plot_type='error',
                 figsize=(10, 5)
             )
-            fig.savefig(os.path.join(exp_dir, f'pixel_removal_error_{n_pixels}.png'))
-            plt.close()
+            fig.write_html(os.path.join(exp_dir, f'pixel_removal_error_{n_pixels}.html'))
+            fig.write_image(os.path.join(exp_dir, f'pixel_removal_error_{n_pixels}.png'))
 
             fig, _ = robustness_analysis.visualize_stored_results(
                 results=results[n_pixels],
                 plot_type='trajectories'
             )
-            fig.savefig(os.path.join(exp_dir, f'pixel_removal_trajectories_{n_pixels}.png'))
-            plt.close()
+            fig.write_html(os.path.join(exp_dir, f'pixel_removal_trajectories_{n_pixels}.html'))
+            fig.write_image(os.path.join(exp_dir, f'pixel_removal_trajectories_{n_pixels}.png'))
 
         print("\nCreating detailed summary CSV (per neighborhood size)...")
         csv_path = os.path.join(exp_dir, 'detailed_metrics.csv')
