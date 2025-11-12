@@ -127,7 +127,19 @@ class MixtureNCANoise(nn.Module):
             
             # Compute mixture weights and get selected rules
             if self.modality == "image":
-                identity = F.conv2d(x, self.identity_kernel, padding=1, groups=self.state_dim)
+                # Dynamic/asymmetric padding to preserve spatial dims for any kernel size
+                k = self.identity_kernel.shape[-1]
+                if k % 2 == 1:
+                    pad = k // 2
+                    identity = F.conv2d(x, self.identity_kernel, padding=pad, groups=self.state_dim)
+                else:
+                    pad_total = k - 1
+                    pad_left = pad_total // 2
+                    pad_right = pad_total - pad_left
+                    pad_top = pad_left
+                    pad_bottom = pad_right
+                    x_padded = F.pad(x, (pad_left, pad_right, pad_top, pad_bottom))
+                    identity = F.conv2d(x_padded, self.identity_kernel, padding=0, groups=self.state_dim)
             elif self.modality == "tensor":
                 identity = F.conv2d(x, self.identity_kernel, padding=0, groups=self.state_dim)
             
@@ -290,7 +302,19 @@ class MixtureNCANoise(nn.Module):
         with torch.no_grad():
             # Get mixture logits
             if self.modality == "image":
-                identity = F.conv2d(x, self.identity_kernel, padding=1, groups=self.state_dim)
+                # Dynamic/asymmetric padding to preserve spatial dims for any kernel size
+                k = self.identity_kernel.shape[-1]
+                if k % 2 == 1:
+                    pad = k // 2
+                    identity = F.conv2d(x, self.identity_kernel, padding=pad, groups=self.state_dim)
+                else:
+                    pad_total = k - 1
+                    pad_left = pad_total // 2
+                    pad_right = pad_total - pad_left
+                    pad_top = pad_left
+                    pad_bottom = pad_right
+                    x_padded = F.pad(x, (pad_left, pad_right, pad_top, pad_bottom))
+                    identity = F.conv2d(x_padded, self.identity_kernel, padding=0, groups=self.state_dim)
             elif self.modality == "tensor":
                 identity = F.conv2d(x, self.identity_kernel, padding=0, groups=self.state_dim)
             mixture_logits = self.mixture_net(identity)
