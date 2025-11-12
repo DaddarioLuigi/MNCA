@@ -174,15 +174,22 @@ class ExtendedMixtureNCA(MixtureNCA):
             identity.unsqueeze(0).unsqueeze(0).repeat(self.state_dim, 1, 1, 1))
 
     def _perceive_image(self, x):
-        padding = self.neighborhood_size // 2
-        identity = F.conv2d(x, self.identity_kernel, padding=padding, groups=self.state_dim)
+        # Use asymmetric padding for even kernel sizes to keep output size == input size
+        k = self.neighborhood_size
+        pad_total = k - 1
+        pad_left = pad_total // 2
+        pad_right = pad_total - pad_left
+        pad_top = pad_left
+        pad_bottom = pad_right
+        x_padded = F.pad(x, (pad_left, pad_right, pad_top, pad_bottom))
+        identity = F.conv2d(x_padded, self.identity_kernel, padding=0, groups=self.state_dim)
         
         if self.filter_type == "sobel":
-            sobel_x = F.conv2d(x, self.sobel_x_kernel, padding=padding, groups=self.state_dim)
-            sobel_y = F.conv2d(x, self.sobel_y_kernel, padding=padding, groups=self.state_dim)
+            sobel_x = F.conv2d(x_padded, self.sobel_x_kernel, padding=0, groups=self.state_dim)
+            sobel_y = F.conv2d(x_padded, self.sobel_y_kernel, padding=0, groups=self.state_dim)
             return torch.cat([identity, sobel_x, sobel_y], dim=1)
         else:  # laplacian
-            laplacian = F.conv2d(x, self.laplacian_kernel, padding=padding, groups=self.state_dim)
+            laplacian = F.conv2d(x_padded, self.laplacian_kernel, padding=0, groups=self.state_dim)
             return torch.cat([identity, laplacian], dim=1)
     
     def _perceive_tensor(self, x):
