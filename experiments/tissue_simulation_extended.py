@@ -160,80 +160,96 @@ def run_experiment(histories_path, output_dir, neighborhood_sizes,
         )
         
         # Train Standard NCA
-        print(f"\nTraining Standard NCA (nb={nb_size})...")
-        train_nca_dyn(
-            nca, histories,
-            n_cell_types=n_cell_types,
-            n_epochs=n_epochs,
-            time_length=time_length,
-            update_every=update_every,
-            device=device,
-            lr=LEARNING_RATE
-        )
-        
-        # Save Standard NCA
-        torch.save(nca.state_dict(), os.path.join(exp_dir, 'standard_nca.pt'))
-        print(f"Saved Standard NCA to {exp_dir}/standard_nca.pt")
+        std_path = os.path.join(exp_dir, 'standard_nca.pt')
+        if os.path.exists(std_path):
+            print(f"Found {std_path}, loading Standard NCA (nb={nb_size})...")
+            nca.load_state_dict(torch.load(std_path, weights_only=True))
+        else:
+            print(f"\nTraining Standard NCA (nb={nb_size})...")
+            train_nca_dyn(
+                nca, histories,
+                n_cell_types=n_cell_types,
+                n_epochs=n_epochs,
+                time_length=time_length,
+                update_every=update_every,
+                device=device,
+                lr=LEARNING_RATE
+            )
+            # Save Standard NCA
+            torch.save(nca.state_dict(), std_path)
+            print(f"Saved Standard NCA to {std_path}")
         
         # Train NCA with Noise
-        print(f"\nTraining NCA with Noise (nb={nb_size})...")
-        train_nca_dyn(
-            nca_with_noise, histories,
-            n_cell_types=n_cell_types,
-            n_epochs=n_epochs,
-            time_length=time_length,
-            update_every=update_every,
-            device=device,
-            lr=LEARNING_RATE / 10  # Lower LR for noise model as in notebook
-        )
-        
-        # Save NCA with Noise
-        torch.save(nca_with_noise.state_dict(), os.path.join(exp_dir, 'nca_with_noise.pt'))
-        print(f"Saved NCA with Noise to {exp_dir}/nca_with_noise.pt")
+        gca_path = os.path.join(exp_dir, 'nca_with_noise.pt')
+        if os.path.exists(gca_path):
+            print(f"Found {gca_path}, loading NCA with Noise (nb={nb_size})...")
+            nca_with_noise.load_state_dict(torch.load(gca_path, weights_only=True))
+        else:
+            print(f"\nTraining NCA with Noise (nb={nb_size})...")
+            train_nca_dyn(
+                nca_with_noise, histories,
+                n_cell_types=n_cell_types,
+                n_epochs=n_epochs,
+                time_length=time_length,
+                update_every=update_every,
+                device=device,
+                lr=LEARNING_RATE / 10  # Lower LR for noise model as in notebook
+            )
+            # Save NCA with Noise
+            torch.save(nca_with_noise.state_dict(), gca_path)
+            print(f"Saved NCA with Noise to {gca_path}")
         
         # Train Mixture NCA
-        print(f"\nTraining Mixture NCA (nb={nb_size})...")
-        train_nca_dyn(
-            model=mix_nca,
-            target_states=histories,
-            n_cell_types=n_cell_types,
-            n_epochs=n_epochs,
-            time_length=time_length,
-            update_every=update_every,
-            device=device,
-            lr=LEARNING_RATE,
-            temperature=TEMPERATURE,
-            min_temperature=MIN_TEMPERATURE,
-            anneal_rate=ANNEAL_RATE,
-            loss_type=LOSS_TYPE,
-            straight_through=False
-        )
-        
-        # Save Mixture NCA
-        torch.save(mix_nca.state_dict(), os.path.join(exp_dir, 'mixture_nca.pt'))
-        print(f"Saved Mixture NCA to {exp_dir}/mixture_nca.pt")
+        mix_path = os.path.join(exp_dir, 'mixture_nca.pt')
+        if os.path.exists(mix_path):
+            print(f"Found {mix_path}, loading Mixture NCA (nb={nb_size})...")
+            mix_nca.load_state_dict(torch.load(mix_path, weights_only=True))
+        else:
+            print(f"\nTraining Mixture NCA (nb={nb_size})...")
+            train_nca_dyn(
+                model=mix_nca,
+                target_states=histories,
+                n_cell_types=n_cell_types,
+                n_epochs=n_epochs,
+                time_length=time_length,
+                update_every=update_every,
+                device=device,
+                lr=LEARNING_RATE,
+                temperature=TEMPERATURE,
+                min_temperature=MIN_TEMPERATURE,
+                anneal_rate=ANNEAL_RATE,
+                loss_type=LOSS_TYPE,
+                straight_through=False
+            )
+            # Save Mixture NCA
+            torch.save(mix_nca.state_dict(), mix_path)
+            print(f"Saved Mixture NCA to {mix_path}")
         
         # Train Stochastic Mixture NCA
-        print(f"\nTraining Stochastic Mixture NCA (nb={nb_size})...")
-        train_nca_dyn(
-            model=stochastic_mix_nca,
-            target_states=histories,
-            n_cell_types=n_cell_types,
-            n_epochs=n_epochs,
-            time_length=time_length,
-            update_every=update_every,
-            device=device,
-            lr=LEARNING_RATE,
-            milestones=MILESTONES,
-            gamma=GAMMA,
-            temperature=TEMPERATURE,
-            min_temperature=MIN_TEMPERATURE,
-            anneal_rate=ANNEAL_RATE
-        )
-        
-        # Save Stochastic Mixture NCA
-        torch.save(stochastic_mix_nca.state_dict(), os.path.join(exp_dir, 'stochastic_mix_nca.pt'))
-        print(f"Saved Stochastic Mixture NCA to {exp_dir}/stochastic_mix_nca.pt")
+        stoch_path = os.path.join(exp_dir, 'stochastic_mix_nca.pt')
+        if os.path.exists(stoch_path):
+            print(f"Found {stoch_path}, loading Stochastic Mixture NCA (nb={nb_size})...")
+            stochastic_mix_nca.load_state_dict(torch.load(stoch_path, weights_only=True))
+        else:
+            print(f"\nTraining Stochastic Mixture NCA (nb={nb_size})...")
+            train_nca_dyn(
+                model=stochastic_mix_nca,
+                target_states=histories,
+                n_cell_types=n_cell_types,
+                n_epochs=n_epochs,
+                time_length=time_length,
+                update_every=update_every,
+                device=device,
+                lr=LEARNING_RATE,
+                milestones=MILESTONES,
+                gamma=GAMMA,
+                temperature=TEMPERATURE,
+                min_temperature=MIN_TEMPERATURE,
+                anneal_rate=ANNEAL_RATE
+            )
+            # Save Stochastic Mixture NCA
+            torch.save(stochastic_mix_nca.state_dict(), stoch_path)
+            print(f"Saved Stochastic Mixture NCA to {stoch_path}")
         
         # Evaluation: Compare generated distributions
         print(f"\nEvaluating models (nb={nb_size})...")
