@@ -260,7 +260,12 @@ def compare_generated_distributions(histories, standard_nca, mixture_nca, stocha
     with torch.no_grad():
         standard_samples = []
         for true_state in initial_states:
-            sample = standard_nca(true_state, n_steps, return_history=True)[-1]
+            result = standard_nca(true_state, n_steps, return_history=True)
+            # ExtendedNCA returns (x, frames) tuple, NCA returns stacked frames
+            if isinstance(result, tuple):
+                sample = result[1][-1] if len(result[1]) > 0 else result[0]
+            else:
+                sample = result[-1]
             standard_samples.append(sample.argmax(dim=1))
         standard_gen = torch.stack(standard_samples).squeeze(1)
     
@@ -308,11 +313,20 @@ def compare_generated_distributions(histories, standard_nca, mixture_nca, stocha
                                     current_state = model(current_state, 1, return_history=False, class_assignment = class_assignment)
                                 sample = current_state
                             else:
-
-                                sample = model(true_state, n_steps, return_history=True)[-1]
+                                result = model(true_state, n_steps, return_history=True)
+                                # ExtendedNCA returns (x, frames) tuple, NCA returns stacked frames
+                                if isinstance(result, tuple):
+                                    sample = result[1][-1] if len(result[1]) > 0 else result[0]
+                                else:
+                                    sample = result[-1]
                             sample = sample.argmax(dim=1)
                         else: 
-                            sample = model(true_state, n_steps, return_history=True, sample_non_differentiable = True)[-1]
+                            result = model(true_state, n_steps, return_history=True, sample_non_differentiable = True)
+                            # ExtendedNCA returns (x, frames) tuple, NCA returns stacked frames
+                            if isinstance(result, tuple):
+                                sample = result[1][-1] if len(result[1]) > 0 else result[0]
+                            else:
+                                sample = result[-1]
                             sample = sample.argmax(dim=1)
                         samples.append(sample)
                     generated = torch.stack(samples).squeeze(1)

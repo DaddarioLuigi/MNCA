@@ -1,0 +1,305 @@
+================================================================================
+NEIGHBORHOOD SIZE ANALYSIS REPORT
+================================================================================
+
+EXECUTIVE SUMMARY
+--------------------------------------------------------------------------------
+This report analyzes the impact of neighborhood size (3-7) on NCA model performance.
+Models analyzed: Standard NCA, Mixture NCA, Stochastic Mixture NCA, NCA with Noise
+Neighborhood sizes: [np.int64(3), np.int64(4), np.int64(5), np.int64(6), np.int64(7)]
+Number of evaluations: 10
+
+BEST PERFORMING CONFIGURATIONS
+--------------------------------------------------------------------------------
+
+KL Divergence:
+  Best: Mixture NCA with NB=5 (value: 0.0100)
+
+Chi-Square:
+  Best: Mixture NCA with NB=5 (value: 0.0100)
+
+Categorical MMD:
+  Best: Stochastic Mixture NCA with NB=3 (value: 0.0170)
+
+Tumor Size Diff:
+  Best: Stochastic Mixture NCA with NB=4 (value: 0.0760)
+
+Border Size Diff:
+  Best: Stochastic Mixture NCA with NB=3 (value: 0.0610)
+
+Spatial Variance Diff:
+  Best: Stochastic Mixture NCA with NB=3 (value: 0.1270)
+
+
+STATISTICAL SIGNIFICANCE TESTS
+--------------------------------------------------------------------------------
+
+KL Divergence:
+  Standard NCA:
+    Kruskal-Wallis: H=49.0000, p=0.000000 ***
+  Mixture NCA:
+    Kruskal-Wallis: H=44.8904, p=0.000000 ***
+  Stochastic Mixture NCA:
+    Kruskal-Wallis: H=46.6974, p=0.000000 ***
+  NCA with Noise:
+    Kruskal-Wallis: H=46.7849, p=0.000000 ***
+
+Chi-Square:
+  Standard NCA:
+    Kruskal-Wallis: H=49.0000, p=0.000000 ***
+  Mixture NCA:
+    Kruskal-Wallis: H=46.8744, p=0.000000 ***
+  Stochastic Mixture NCA:
+    Kruskal-Wallis: H=45.9944, p=0.000000 ***
+  NCA with Noise:
+    Kruskal-Wallis: H=47.0588, p=0.000000 ***
+
+Categorical MMD:
+  Standard NCA:
+    Kruskal-Wallis: H=49.0000, p=0.000000 ***
+  Mixture NCA:
+    Kruskal-Wallis: H=47.0588, p=0.000000 ***
+  Stochastic Mixture NCA:
+    Kruskal-Wallis: H=47.0588, p=0.000000 ***
+  NCA with Noise:
+    Kruskal-Wallis: H=47.0588, p=0.000000 ***
+
+Tumor Size Diff:
+  Standard NCA:
+    Kruskal-Wallis: H=49.0000, p=0.000000 ***
+  Mixture NCA:
+    Kruskal-Wallis: H=44.7294, p=0.000000 ***
+  Stochastic Mixture NCA:
+    Kruskal-Wallis: H=46.7793, p=0.000000 ***
+  NCA with Noise:
+    Kruskal-Wallis: H=47.0588, p=0.000000 ***
+
+Border Size Diff:
+  Mixture NCA:
+    Kruskal-Wallis: H=47.0633, p=0.000000 ***
+  Stochastic Mixture NCA:
+    Kruskal-Wallis: H=47.0611, p=0.000000 ***
+  NCA with Noise:
+    Kruskal-Wallis: H=42.7721, p=0.000000 ***
+
+Spatial Variance Diff:
+  Mixture NCA:
+    Kruskal-Wallis: H=44.8904, p=0.000000 ***
+  Stochastic Mixture NCA:
+    Kruskal-Wallis: H=47.0588, p=0.000000 ***
+  NCA with Noise:
+    Kruskal-Wallis: H=42.6202, p=0.000000 ***
+
+
+PERFORMANCE TRENDS
+--------------------------------------------------------------------------------
+
+Standard NCA - KL Divergence:
+  Correlation (Pearson): r=-0.8218, p=0.087880
+  Correlation (Spearman): r=-1.0000, p=0.000000
+  Linear slope: -1.567000, p=0.087880
+  Best NB: 7, Worst NB: 3
+  Improvement NB3→NB7: 97.12%
+
+Standard NCA - Chi-Square:
+  Correlation (Pearson): r=-0.9918, p=0.000882
+  Correlation (Spearman): r=-1.0000, p=0.000000
+  Linear slope: -0.190200, p=0.000882
+  Best NB: 7, Worst NB: 3
+  Improvement NB3→NB7: 79.67%
+
+Standard NCA - Categorical MMD:
+  Correlation (Pearson): r=-0.6838, p=0.202992
+  Correlation (Spearman): r=-0.5000, p=0.391002
+  Linear slope: -0.061300, p=0.202992
+  Best NB: 6, Worst NB: 3
+  Improvement NB3→NB7: 29.61%
+
+Standard NCA - Tumor Size Diff:
+  Correlation (Pearson): r=-0.7467, p=0.147092
+  Correlation (Spearman): r=-0.7000, p=0.188120
+  Linear slope: -0.174900, p=0.147092
+  Best NB: 5, Worst NB: 3
+  Improvement NB3→NB7: 78.02%
+
+Standard NCA - Border Size Diff:
+  Correlation (Pearson): r=nan, p=nan
+  Correlation (Spearman): r=nan, p=nan
+  Linear slope: 0.000000, p=nan
+  Best NB: 3, Worst NB: 3
+  Improvement NB3→NB7: 0.00%
+
+Standard NCA - Spatial Variance Diff:
+  Correlation (Pearson): r=nan, p=nan
+  Correlation (Spearman): r=nan, p=nan
+  Linear slope: 0.000000, p=nan
+  Best NB: 3, Worst NB: 3
+  Improvement NB3→NB7: 0.00%
+
+Mixture NCA - KL Divergence:
+  Correlation (Pearson): r=0.8290, p=0.082659
+  Correlation (Spearman): r=0.5000, p=0.391002
+  Linear slope: 0.342800, p=0.082659
+  Best NB: 5, Worst NB: 6
+  Improvement NB3→NB7: -2003.70%
+
+Mixture NCA - Chi-Square:
+  Correlation (Pearson): r=0.8405, p=0.074633
+  Correlation (Spearman): r=0.6000, p=0.284757
+  Linear slope: 0.206300, p=0.074633
+  Best NB: 5, Worst NB: 7
+  Improvement NB3→NB7: -1647.17%
+
+Mixture NCA - Categorical MMD:
+  Correlation (Pearson): r=0.6133, p=0.271267
+  Correlation (Spearman): r=0.6000, p=0.284757
+  Linear slope: 0.037100, p=0.271267
+  Best NB: 5, Worst NB: 6
+  Improvement NB3→NB7: -249.09%
+
+Mixture NCA - Tumor Size Diff:
+  Correlation (Pearson): r=0.2816, p=0.646271
+  Correlation (Spearman): r=0.2000, p=0.747060
+  Linear slope: 0.028200, p=0.646271
+  Best NB: 5, Worst NB: 7
+  Improvement NB3→NB7: -45.12%
+
+Mixture NCA - Border Size Diff:
+  Correlation (Pearson): r=0.0364, p=0.953638
+  Correlation (Spearman): r=0.2000, p=0.747060
+  Linear slope: 0.002400, p=0.953638
+  Best NB: 5, Worst NB: 7
+  Improvement NB3→NB7: -32.85%
+
+Mixture NCA - Spatial Variance Diff:
+  Correlation (Pearson): r=0.0688, p=0.912421
+  Correlation (Spearman): r=0.2000, p=0.747060
+  Linear slope: 0.010900, p=0.912421
+  Best NB: 5, Worst NB: 7
+  Improvement NB3→NB7: -38.26%
+
+Stochastic Mixture NCA - KL Divergence:
+  Correlation (Pearson): r=0.3056, p=0.617038
+  Correlation (Spearman): r=0.2000, p=0.747060
+  Linear slope: 0.043800, p=0.617038
+  Best NB: 4, Worst NB: 6
+  Improvement NB3→NB7: 37.04%
+
+Stochastic Mixture NCA - Chi-Square:
+  Correlation (Pearson): r=0.3455, p=0.569006
+  Correlation (Spearman): r=0.2000, p=0.747060
+  Linear slope: 0.037300, p=0.569006
+  Best NB: 4, Worst NB: 6
+  Improvement NB3→NB7: 16.83%
+
+Stochastic Mixture NCA - Categorical MMD:
+  Correlation (Pearson): r=0.3016, p=0.621871
+  Correlation (Spearman): r=0.5000, p=0.391002
+  Linear slope: 0.017700, p=0.621871
+  Best NB: 3, Worst NB: 6
+  Improvement NB3→NB7: -229.41%
+
+Stochastic Mixture NCA - Tumor Size Diff:
+  Correlation (Pearson): r=0.3371, p=0.579082
+  Correlation (Spearman): r=0.2000, p=0.747060
+  Linear slope: 0.070500, p=0.579082
+  Best NB: 4, Worst NB: 6
+  Improvement NB3→NB7: 28.03%
+
+Stochastic Mixture NCA - Border Size Diff:
+  Correlation (Pearson): r=-0.1292, p=0.835929
+  Correlation (Spearman): r=0.1000, p=0.872889
+  Linear slope: -0.005700, p=0.835929
+  Best NB: 3, Worst NB: 4
+  Improvement NB3→NB7: -70.49%
+
+Stochastic Mixture NCA - Spatial Variance Diff:
+  Correlation (Pearson): r=0.0343, p=0.956323
+  Correlation (Spearman): r=0.0000, p=1.000000
+  Linear slope: 0.004500, p=0.956323
+  Best NB: 3, Worst NB: 4
+  Improvement NB3→NB7: -118.11%
+
+NCA with Noise - KL Divergence:
+  Correlation (Pearson): r=0.6254, p=0.259202
+  Correlation (Spearman): r=0.6000, p=0.284757
+  Linear slope: 0.042500, p=0.259202
+  Best NB: 4, Worst NB: 5
+  Improvement NB3→NB7: -51.57%
+
+NCA with Noise - Chi-Square:
+  Correlation (Pearson): r=0.5635, p=0.322525
+  Correlation (Spearman): r=0.6000, p=0.284757
+  Linear slope: 0.036600, p=0.322525
+  Best NB: 4, Worst NB: 5
+  Improvement NB3→NB7: -40.18%
+
+NCA with Noise - Categorical MMD:
+  Correlation (Pearson): r=0.2382, p=0.699554
+  Correlation (Spearman): r=0.3000, p=0.623838
+  Linear slope: 0.002300, p=0.699554
+  Best NB: 4, Worst NB: 5
+  Improvement NB3→NB7: -1.98%
+
+NCA with Noise - Tumor Size Diff:
+  Correlation (Pearson): r=0.3743, p=0.534845
+  Correlation (Spearman): r=0.3000, p=0.623838
+  Linear slope: 0.016300, p=0.534845
+  Best NB: 4, Worst NB: 5
+  Improvement NB3→NB7: -2.98%
+
+NCA with Noise - Border Size Diff:
+  Correlation (Pearson): r=-0.4459, p=0.451700
+  Correlation (Spearman): r=-0.7182, p=0.171795
+  Linear slope: -0.029800, p=0.451700
+  Best NB: 5, Worst NB: 4
+  Improvement NB3→NB7: 37.17%
+
+NCA with Noise - Spatial Variance Diff:
+  Correlation (Pearson): r=-0.6889, p=0.198290
+  Correlation (Spearman): r=-0.8000, p=0.104088
+  Linear slope: -0.037900, p=0.198290
+  Best NB: 7, Worst NB: 4
+  Improvement NB3→NB7: 12.94%
+
+
+COMPUTATIONAL COMPLEXITY
+--------------------------------------------------------------------------------
+
+NB=3.0:
+  Mean time: 0.0213 ± 0.0031 s
+  Time per step: 0.61 ms
+  Complexity factor (vs NB=3): 0.00x
+
+NB=4.0:
+  Mean time: 0.0185 ± 0.0019 s
+  Time per step: 0.53 ms
+  Complexity factor (vs NB=3): 0.00x
+
+NB=5.0:
+  Mean time: 0.0179 ± 0.0002 s
+  Time per step: 0.51 ms
+  Complexity factor (vs NB=3): 0.00x
+
+NB=6.0:
+  Mean time: 0.0220 ± 0.0028 s
+  Time per step: 0.63 ms
+  Complexity factor (vs NB=3): 0.00x
+
+NB=7.0:
+  Mean time: 0.0205 ± 0.0013 s
+  Time per step: 0.58 ms
+  Complexity factor (vs NB=3): 0.00x
+
+
+RECOMMENDATIONS
+--------------------------------------------------------------------------------
+
+Best overall configuration: Mixture NCA with NB=5
+(Based on normalized sum of all metrics)
+
+Key Findings:
+1. Analyze the statistical significance tests to determine if differences are meaningful
+2. Consider computational cost vs. performance gain
+3. Check if larger neighborhoods provide consistent improvements across all metrics
+4. Evaluate if the improvement justifies the increased computational cost

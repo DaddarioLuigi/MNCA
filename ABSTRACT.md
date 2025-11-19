@@ -10,3 +10,4 @@ The insights gained from these comprehensive evaluations guide the development o
 
 This work contributes to the growing field of computational biology by providing a systematic framework for evaluating and extending neural cellular automata models, with particular emphasis on their application to complex biological systems. The findings from this assessment inform best practices for model selection, parameter tuning, and deployment in biological modeling scenarios, ultimately advancing our ability to simulate and understand stochastic biological processes.
 
+
