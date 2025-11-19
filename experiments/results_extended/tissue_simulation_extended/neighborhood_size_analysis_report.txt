@@ -125,14 +125,14 @@ Standard NCA - Tumor Size Diff:
 Standard NCA - Border Size Diff:
   Correlation (Pearson): r=nan, p=nan
   Correlation (Spearman): r=nan, p=nan
-  Linear slope: 0.000000, p=nan
+  Linear slope: 0.000000, p=1.000000
   Best NB: 3, Worst NB: 3
   Improvement NB3→NB7: 0.00%
 
 Standard NCA - Spatial Variance Diff:
   Correlation (Pearson): r=nan, p=nan
   Correlation (Spearman): r=nan, p=nan
-  Linear slope: 0.000000, p=nan
+  Linear slope: 0.000000, p=1.000000
   Best NB: 3, Worst NB: 3
   Improvement NB3→NB7: 0.00%
 
@@ -267,28 +267,28 @@ COMPUTATIONAL COMPLEXITY
 --------------------------------------------------------------------------------
 
 NB=3.0:
-  Mean time: 0.0213 ± 0.0031 s
-  Time per step: 0.61 ms
+  Mean time: 0.0362 ± 0.0142 s
+  Time per step: 1.03 ms
   Complexity factor (vs NB=3): 0.00x
 
 NB=4.0:
-  Mean time: 0.0185 ± 0.0019 s
-  Time per step: 0.53 ms
-  Complexity factor (vs NB=3): 0.00x
-
-NB=5.0:
-  Mean time: 0.0179 ± 0.0002 s
-  Time per step: 0.51 ms
-  Complexity factor (vs NB=3): 0.00x
-
-NB=6.0:
-  Mean time: 0.0220 ± 0.0028 s
+  Mean time: 0.0220 ± 0.0009 s
   Time per step: 0.63 ms
   Complexity factor (vs NB=3): 0.00x
 
+NB=5.0:
+  Mean time: 0.0223 ± 0.0024 s
+  Time per step: 0.64 ms
+  Complexity factor (vs NB=3): 0.00x
+
+NB=6.0:
+  Mean time: 0.0159 ± 0.0006 s
+  Time per step: 0.45 ms
+  Complexity factor (vs NB=3): 0.00x
+
 NB=7.0:
-  Mean time: 0.0205 ± 0.0013 s
-  Time per step: 0.58 ms
+  Mean time: 0.0182 ± 0.0020 s
+  Time per step: 0.52 ms
   Complexity factor (vs NB=3): 0.00x
 
 

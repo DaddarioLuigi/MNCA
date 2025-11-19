@@ -448,10 +448,20 @@ class NeighborhoodSizeAnalyzer:
                 
                 # Test for normality (Shapiro-Wilk test on each group)
                 normalities = {}
+                import warnings
                 for nb in sorted(groups.keys()):
                     if len(groups[nb]) >= 3 and len(groups[nb]) <= 5000:  # Shapiro-Wilk works for 3-5000 samples
-                        stat, p = shapiro(groups[nb])
-                        normalities[nb] = {'statistic': stat, 'p_value': p, 'normal': p > 0.05}
+                        # Suppress warnings for constant data (normal for deterministic models)
+                        with warnings.catch_warnings():
+                            warnings.filterwarnings('ignore', message='.*Input data has range zero.*')
+                            warnings.filterwarnings('ignore', message='.*invalid value encountered.*')
+                            warnings.filterwarnings('ignore', category=RuntimeWarning)
+                            try:
+                                stat, p = shapiro(groups[nb])
+                                normalities[nb] = {'statistic': stat, 'p_value': p, 'normal': p > 0.05}
+                            except:
+                                # If test fails (e.g., constant data), mark as not applicable
+                                normalities[nb] = {'normal': None}
                     else:
                         normalities[nb] = {'normal': None}  # Cannot test
                 
@@ -459,12 +469,17 @@ class NeighborhoodSizeAnalyzer:
                 
                 # Test for equal variances (Levene's test)
                 group_list = [groups[nb] for nb in sorted(groups.keys())]
-                try:
-                    levene_stat, levene_p = levene(*group_list)
-                    equal_variances = levene_p > 0.05
-                except:
-                    equal_variances = False
-                    levene_stat, levene_p = np.nan, np.nan
+                import warnings
+                with warnings.catch_warnings():
+                    warnings.filterwarnings('ignore', message='.*Precision loss.*')
+                    warnings.filterwarnings('ignore', message='.*invalid value.*')
+                    warnings.filterwarnings('ignore', category=RuntimeWarning)
+                    try:
+                        levene_stat, levene_p = levene(*group_list)
+                        equal_variances = levene_p > 0.05
+                    except:
+                        equal_variances = False
+                        levene_stat, levene_p = np.nan, np.nan
                 
                 print(f"  Normality tests (Shapiro-Wilk):")
                 for nb in sorted(normalities.keys()):
@@ -593,21 +608,63 @@ class NeighborhoodSizeAnalyzer:
                 means = grouped['mean'].values
                 
                 if len(sizes) > 1:
-                    # Pearson correlation
-                    pearson_r, pearson_p = stats.pearsonr(sizes, means)
+                    # Check if all values are constant (zero variance) - use multiple checks for robustness
+                    std_means = np.std(means)
+                    unique_means = len(np.unique(means))
+                    range_means = np.max(means) - np.min(means)
+                    mean_abs = np.abs(np.mean(means))
                     
-                    # Spearman correlation (monotonic relationship)
-                    spearman_r, spearman_p = stats.spearmanr(sizes, means)
+                    # Check: std is zero, only one unique value, or range is effectively zero
+                    is_constant = (std_means < 1e-10 or 
+                                  unique_means == 1 or 
+                                  (mean_abs > 0 and range_means / mean_abs < 1e-10) or
+                                  range_means < 1e-10)
                     
-                    # Linear regression slope
-                    slope, intercept, r_value, p_value, std_err = stats.linregress(sizes, means)
+                    if is_constant:
+                        # All values are identical - correlation is undefined
+                        pearson_r, pearson_p = np.nan, np.nan
+                        spearman_r, spearman_p = np.nan, np.nan
+                        slope, intercept, r_value, p_value, std_err = np.nan, np.nan, np.nan, np.nan, np.nan
+                    else:
+                        # Suppress warnings for constant input (shouldn't happen after check, but just in case)
+                        import warnings
+                        with warnings.catch_warnings():
+                            warnings.filterwarnings('ignore', message='.*constant.*correlation.*')
+                            warnings.filterwarnings('ignore', message='.*An input array is constant.*')
+                            warnings.filterwarnings('ignore', message='.*Precision loss.*')
+                            warnings.filterwarnings('ignore', message='.*invalid value.*')
+                            warnings.filterwarnings('ignore', category=RuntimeWarning)
+                            warnings.filterwarnings('ignore', category=UserWarning)
+                            # Pearson correlation
+                            pearson_r, pearson_p = stats.pearsonr(sizes, means)
+                            
+                            # Spearman correlation (monotonic relationship)
+                            spearman_r, spearman_p = stats.spearmanr(sizes, means)
+                            
+                            # Linear regression slope
+                            slope, intercept, r_value, p_value, std_err = stats.linregress(sizes, means)
+                    
+                    # Calculate improvement metrics
+                    mean_nb3 = grouped.loc[3, 'mean'] if 3 in sizes else np.nan
+                    mean_nb7 = grouped.loc[7, 'mean'] if 7 in sizes else np.nan
+                    
+                    if 3 in sizes and 7 in sizes and not np.isnan(mean_nb3) and mean_nb3 != 0:
+                        improvement_pct = (mean_nb3 - mean_nb7) / mean_nb3 * 100
+                        fold_change = mean_nb7 / mean_nb3 if mean_nb3 != 0 else np.nan
+                        abs_diff = mean_nb7 - mean_nb3
+                    else:
+                        improvement_pct = np.nan
+                        fold_change = np.nan
+                        abs_diff = np.nan
                     
                     trend_results.append({
                         'Model Type': model_type,
                         'Metric': metric,
-                        'Mean_NB3': grouped.loc[3, 'mean'] if 3 in sizes else np.nan,
-                        'Mean_NB7': grouped.loc[7, 'mean'] if 7 in sizes else np.nan,
-                        'Improvement_3_to_7': (grouped.loc[3, 'mean'] - grouped.loc[7, 'mean']) / grouped.loc[3, 'mean'] * 100 if (3 in sizes and 7 in sizes) else np.nan,
+                        'Mean_NB3': mean_nb3,
+                        'Mean_NB7': mean_nb7,
+                        'Improvement_3_to_7': improvement_pct,
+                        'Fold_Change_NB7_vs_NB3': fold_change,  # NB7/NB3 ratio (>1 means worse if lower is better)
+                        'Absolute_Diff_NB7_vs_NB3': abs_diff,  # NB7 - NB3
                         'Pearson_r': pearson_r,
                         'Pearson_p': pearson_p,
                         'Spearman_r': spearman_r,
@@ -619,13 +676,21 @@ class NeighborhoodSizeAnalyzer:
                     })
                     
                     print(f"{model_type} - {metric}:")
-                    print(f"  Correlation (Pearson): r={pearson_r:.4f}, p={pearson_p:.4f}")
-                    print(f"  Correlation (Spearman): r={spearman_r:.4f}, p={spearman_p:.4f}")
-                    print(f"  Linear trend: slope={slope:.6f}, p={p_value:.4f}")
+                    if np.isnan(pearson_r):
+                        print(f"  Correlation (Pearson): undefined (constant values)")
+                        print(f"  Correlation (Spearman): undefined (constant values)")
+                        print(f"  Linear trend: undefined (constant values)")
+                    else:
+                        print(f"  Correlation (Pearson): r={pearson_r:.4f}, p={pearson_p:.4f}")
+                        print(f"  Correlation (Spearman): r={spearman_r:.4f}, p={spearman_p:.4f}")
+                        print(f"  Linear trend: slope={slope:.6f}, p={p_value:.4f}")
                     print(f"  Best NB: {sizes[np.argmin(means)]}, Worst NB: {sizes[np.argmax(means)]}")
-                    if 3 in sizes and 7 in sizes:
-                        improvement = (grouped.loc[3, 'mean'] - grouped.loc[7, 'mean']) / grouped.loc[3, 'mean'] * 100
-                        print(f"  Improvement NB3→NB7: {improvement:.2f}%")
+                    if 3 in sizes and 7 in sizes and not np.isnan(improvement_pct):
+                        print(f"  Improvement NB3→NB7: {improvement_pct:.2f}%")
+                        if not np.isnan(fold_change):
+                            print(f"  Fold Change (NB7/NB3): {fold_change:.3f}x")
+                        if not np.isnan(abs_diff):
+                            print(f"  Absolute Difference (NB7-NB3): {abs_diff:.4f}")
                     print()
         
         return pd.DataFrame(trend_results)
