@@ -6,11 +6,10 @@ trained with different neighborhood sizes (3, 4, 5, 6, 7).
 
 Analysis includes:
 1. Model evaluation and metric computation
-2. Statistical significance testing
-3. Performance trend analysis
-4. Computational complexity analysis
-5. Model-specific comparisons
-6. Visualization of results
+2. Performance trend analysis
+3. Computational complexity analysis
+4. Model-specific comparisons
+5. Visualization of results
 """
 
 import torch
@@ -22,7 +21,6 @@ import json
 import time
 from pathlib import Path
 from scipy import stats
-from scipy.stats import kruskal, mannwhitneyu, friedmanchisquare
 import plotly.graph_objects as go
 import plotly.express as px
 from plotly.subplots import make_subplots
@@ -373,211 +371,6 @@ class NeighborhoodSizeAnalyzer:
                 df[col] = df[col].astype(str).str.replace('±.*', '', regex=True).astype(float)
         
         return df
-    
-    def statistical_tests(self) -> Dict:
-        """Perform formal statistical tests to compare neighborhood sizes
-        
-        Uses raw evaluation data (multiple evaluations per configuration) to perform
-        proper statistical tests: Kruskal-Wallis, Mann-Whitney U, t-test, etc.
-        """
-        print(f"\n{'='*60}")
-        print("Formal Statistical Tests")
-        print(f"{'='*60}\n")
-        
-        import pickle
-        from scipy.stats import ttest_ind, shapiro, levene
-        
-        # Load raw data from all neighborhood sizes
-        raw_data_all = []
-        neighborhood_sizes = sorted([int(d.name.split('_')[1]) for d in self.base_dir.iterdir() 
-                                    if d.is_dir() and d.name.startswith('NB_')])
-        
-        for nb_size in neighborhood_sizes:
-            raw_data_path = self.base_dir / f'NB_{nb_size}' / 'raw_metrics_data.pkl'
-            if raw_data_path.exists():
-                with open(raw_data_path, 'rb') as f:
-                    raw_data = pickle.load(f)
-                    raw_data_all.append(pd.DataFrame(raw_data))
-            else:
-                print(f"Warning: Raw data not found for NB_{nb_size}. Run evaluation first.")
-                return {}
-        
-        if not raw_data_all:
-            print("Error: No raw data found. Please run evaluation with save_raw_data=True")
-            return {}
-        
-        # Combine all raw data
-        raw_df = pd.concat(raw_data_all, ignore_index=True)
-        
-        results = {}
-        metric_cols = ['KL Divergence', 'Chi-Square', 'Categorical MMD', 
-                      'Tumor Size Diff', 'Border Size Diff', 'Spatial Variance Diff']
-        
-        for metric in metric_cols:
-            if metric not in raw_df.columns:
-                continue
-            
-            print(f"\n{'='*60}")
-            print(f"STATISTICAL TESTS: {metric}")
-            print(f"{'='*60}\n")
-            
-            metric_results = {}
-            model_types = raw_df['Model Type'].unique()
-            
-            for model_type in model_types:
-                model_data = raw_df[raw_df['Model Type'] == model_type]
-                
-                # Extract groups for each neighborhood size
-                groups = {}
-                for nb_size in neighborhood_sizes:
-                    nb_data = model_data[model_data['Neighborhood Size'] == nb_size][metric].values
-                    if len(nb_data) > 0:
-                        groups[nb_size] = nb_data
-                
-                if len(groups) < 2:
-                    continue
-                
-                print(f"\n{model_type}:")
-                print(f"  Sample sizes: {[(nb, len(groups[nb])) for nb in sorted(groups.keys())]}")
-                
-                # Descriptive statistics
-                for nb in sorted(groups.keys()):
-                    values = groups[nb]
-                    print(f"    NB={nb}: mean={np.mean(values):.4f}, std={np.std(values):.4f}, "
-                          f"median={np.median(values):.4f}")
-                
-                # Test for normality (Shapiro-Wilk test on each group)
-                normalities = {}
-                import warnings
-                for nb in sorted(groups.keys()):
-                    if len(groups[nb]) >= 3 and len(groups[nb]) <= 5000:  # Shapiro-Wilk works for 3-5000 samples
-                        # Suppress warnings for constant data (normal for deterministic models)
-                        with warnings.catch_warnings():
-                            warnings.filterwarnings('ignore', message='.*Input data has range zero.*')
-                            warnings.filterwarnings('ignore', message='.*invalid value encountered.*')
-                            warnings.filterwarnings('ignore', category=RuntimeWarning)
-                            try:
-                                stat, p = shapiro(groups[nb])
-                                normalities[nb] = {'statistic': stat, 'p_value': p, 'normal': p > 0.05}
-                            except:
-                                # If test fails (e.g., constant data), mark as not applicable
-                                normalities[nb] = {'normal': None}
-                    else:
-                        normalities[nb] = {'normal': None}  # Cannot test
-                
-                all_normal = all(n.get('normal', False) for n in normalities.values() if n.get('normal') is not None)
-                
-                # Test for equal variances (Levene's test)
-                group_list = [groups[nb] for nb in sorted(groups.keys())]
-                import warnings
-                with warnings.catch_warnings():
-                    warnings.filterwarnings('ignore', message='.*Precision loss.*')
-                    warnings.filterwarnings('ignore', message='.*invalid value.*')
-                    warnings.filterwarnings('ignore', category=RuntimeWarning)
-                    try:
-                        levene_stat, levene_p = levene(*group_list)
-                        equal_variances = levene_p > 0.05
-                    except:
-                        equal_variances = False
-                        levene_stat, levene_p = np.nan, np.nan
-                
-                print(f"  Normality tests (Shapiro-Wilk):")
-                for nb in sorted(normalities.keys()):
-                    norm = normalities[nb]
-                    if norm.get('normal') is not None:
-                        status = "normal" if norm['normal'] else "non-normal"
-                        print(f"    NB={nb}: W={norm['statistic']:.4f}, p={norm['p_value']:.4f} ({status})")
-                
-                print(f"  Equal variances (Levene's test): W={levene_stat:.4f}, p={levene_p:.4f} "
-                      f"({'equal' if equal_variances else 'unequal'})")
-                
-                # Kruskal-Wallis test (non-parametric ANOVA) - always applicable
-                try:
-                    kw_stat, kw_p = kruskal(*group_list)
-                    print(f"\n  Kruskal-Wallis Test (non-parametric ANOVA):")
-                    print(f"    H-statistic: {kw_stat:.4f}")
-                    print(f"    p-value: {kw_p:.6f}")
-                    significance = '***' if kw_p < 0.001 else '**' if kw_p < 0.01 else '*' if kw_p < 0.05 else 'ns'
-                    print(f"    Significance: {significance} ({'significant' if kw_p < 0.05 else 'not significant'})")
-                    
-                    metric_results[model_type] = {
-                        'kruskal_wallis': {
-                            'statistic': kw_stat,
-                            'p_value': kw_p,
-                            'significant': kw_p < 0.05
-                        },
-                        'normality': normalities,
-                        'equal_variances': equal_variances
-                    }
-                    
-                    # If significant, do pairwise comparisons
-                    if kw_p < 0.05:
-                        print(f"\n  Pairwise Comparisons (post-hoc tests):")
-                        pairwise_results = {}
-                        
-                        for i, nb1 in enumerate(sorted(groups.keys())):
-                            for j, nb2 in enumerate(sorted(groups.keys())):
-                                if i >= j:
-                                    continue
-                                
-                                data1 = groups[nb1]
-                                data2 = groups[nb2]
-                                
-                                # Mann-Whitney U test (non-parametric, always applicable)
-                                try:
-                                    u_stat, u_p = mannwhitneyu(data1, data2, alternative='two-sided')
-                                    u_significant = u_p < 0.05
-                                    
-                                    # T-test (parametric, if data is normal)
-                                    if all_normal and equal_variances:
-                                        t_stat, t_p = ttest_ind(data1, data2, equal_var=True)
-                                        t_significant = t_p < 0.05
-                                    elif all_normal:
-                                        t_stat, t_p = ttest_ind(data1, data2, equal_var=False)
-                                        t_significant = t_p < 0.05
-                                    else:
-                                        t_stat, t_p = np.nan, np.nan
-                                        t_significant = False
-                                    
-                                    mean1, mean2 = np.mean(data1), np.mean(data2)
-                                    better = nb1 if mean1 < mean2 else nb2  # Lower is better
-                                    
-                                    pairwise_results[f"{nb1}_vs_{nb2}"] = {
-                                        'mann_whitney': {
-                                            'statistic': u_stat,
-                                            'p_value': u_p,
-                                            'significant': u_significant
-                                        },
-                                        't_test': {
-                                            'statistic': t_stat if not np.isnan(t_stat) else None,
-                                            'p_value': t_p if not np.isnan(t_p) else None,
-                                            'significant': t_significant
-                                        },
-                                        'mean1': mean1,
-                                        'mean2': mean2,
-                                        'better': better
-                                    }
-                                    
-                                    if u_significant:
-                                        sig = '***' if u_p < 0.001 else '**' if u_p < 0.01 else '*'
-                                        print(f"    NB{nb1} vs NB{nb2}:")
-                                        print(f"      Mann-Whitney U: U={u_stat:.2f}, p={u_p:.6f} {sig}")
-                                        if not np.isnan(t_p):
-                                            t_sig = '***' if t_p < 0.001 else '**' if t_p < 0.01 else '*'
-                                            print(f"      t-test: t={t_stat:.4f}, p={t_p:.6f} {t_sig}")
-                                        print(f"      Means: NB{nb1}={mean1:.4f}, NB{nb2}={mean2:.4f} (better: NB{better})")
-                                
-                                except Exception as e:
-                                    print(f"      Error in pairwise test NB{nb1} vs NB{nb2}: {e}")
-                        
-                        metric_results[model_type]['pairwise'] = pairwise_results
-                
-                except Exception as e:
-                    print(f"  Error in Kruskal-Wallis test: {e}")
-            
-            results[metric] = metric_results
-        
-        return results
     
     def performance_trend_analysis(self) -> pd.DataFrame:
         """Analyze performance trends across neighborhood sizes"""
@@ -977,124 +770,6 @@ class NeighborhoodSizeAnalyzer:
         print(f"Saved: {filename}")
         
         print(f"\nAll visualizations saved to {output_dir}")
-    
-    def generate_report(self, output_path: Optional[str] = None):
-        """Generate comprehensive analysis report"""
-        if output_path is None:
-            output_path = self.base_dir / "neighborhood_size_analysis_report.txt"
-        else:
-            output_path = Path(output_path)
-        
-        print(f"\n{'='*60}")
-        print("Generating Analysis Report")
-        print(f"{'='*60}\n")
-        
-        df = self.parse_metrics()
-        
-        with open(output_path, 'w') as f:
-            f.write("="*80 + "\n")
-            f.write("NEIGHBORHOOD SIZE ANALYSIS REPORT\n")
-            f.write("="*80 + "\n\n")
-            
-            f.write("EXECUTIVE SUMMARY\n")
-            f.write("-"*80 + "\n")
-            f.write("This report analyzes the impact of neighborhood size (3-7) on NCA model performance.\n")
-            f.write(f"Models analyzed: {', '.join(df['Model Type'].unique())}\n")
-            f.write(f"Neighborhood sizes: {sorted(df['Neighborhood Size'].unique())}\n")
-            f.write(f"Number of evaluations: {self.n_evaluations}\n\n")
-            
-            # Best performing configurations
-            f.write("BEST PERFORMING CONFIGURATIONS\n")
-            f.write("-"*80 + "\n")
-            
-            metric_cols = ['KL Divergence', 'Chi-Square', 'Categorical MMD', 
-                          'Tumor Size Diff', 'Border Size Diff', 'Spatial Variance Diff']
-            
-            for metric in metric_cols:
-                if metric not in df.columns:
-                    continue
-                
-                best_idx = df[metric].idxmin()
-                best_row = df.loc[best_idx]
-                f.write(f"\n{metric}:\n")
-                f.write(f"  Best: {best_row['Model Type']} with NB={best_row['Neighborhood Size']} "
-                       f"(value: {best_row[metric]:.4f})\n")
-            
-            # Statistical tests
-            f.write("\n\nSTATISTICAL SIGNIFICANCE TESTS\n")
-            f.write("-"*80 + "\n")
-            
-            stat_results = self.statistical_tests()
-            for metric, model_results in stat_results.items():
-                f.write(f"\n{metric}:\n")
-                for model_type, results in model_results.items():
-                    if 'kruskal_wallis' in results:
-                        kw = results['kruskal_wallis']
-                        f.write(f"  {model_type}:\n")
-                        f.write(f"    Kruskal-Wallis: H={kw['statistic']:.4f}, "
-                               f"p={kw['p_value']:.6f} "
-                               f"{'***' if kw['p_value'] < 0.001 else '**' if kw['p_value'] < 0.01 else '*' if kw['p_value'] < 0.05 else '(not significant)'}\n")
-            
-            # Trend analysis
-            f.write("\n\nPERFORMANCE TRENDS\n")
-            f.write("-"*80 + "\n")
-            
-            trend_df = self.performance_trend_analysis()
-            for _, row in trend_df.iterrows():
-                f.write(f"\n{row['Model Type']} - {row['Metric']}:\n")
-                f.write(f"  Correlation (Pearson): r={row['Pearson_r']:.4f}, p={row['Pearson_p']:.6f}\n")
-                f.write(f"  Correlation (Spearman): r={row['Spearman_r']:.4f}, p={row['Spearman_p']:.6f}\n")
-                f.write(f"  Linear slope: {row['Slope']:.6f}, p={row['Slope_p']:.6f}\n")
-                f.write(f"  Best NB: {row['Best_NB']}, Worst NB: {row['Worst_NB']}\n")
-                if not np.isnan(row['Improvement_3_to_7']):
-                    f.write(f"  Improvement NB3→NB7: {row['Improvement_3_to_7']:.2f}%\n")
-            
-            # Computational complexity
-            f.write("\n\nCOMPUTATIONAL COMPLEXITY\n")
-            f.write("-"*80 + "\n")
-            
-            complexity_df = self.computational_complexity_analysis()
-            for _, row in complexity_df.iterrows():
-                f.write(f"\nNB={row['Neighborhood Size']}:\n")
-                f.write(f"  Mean time: {row['Mean Time (s)']:.4f} ± {row['Std Time (s)']:.4f} s\n")
-                f.write(f"  Time per step: {row['Time per Step (ms)']:.2f} ms\n")
-                f.write(f"  Complexity factor (vs NB=3): {row['Normalized Time']:.2f}x\n")
-            
-            # Recommendations
-            f.write("\n\nRECOMMENDATIONS\n")
-            f.write("-"*80 + "\n")
-            
-            # Find best overall configuration
-            # Weight different metrics (lower is better for all)
-            normalized_scores = {}
-            for model_type in df['Model Type'].unique():
-                model_data = df[df['Model Type'] == model_type]
-                for nb_size in model_data['Neighborhood Size'].unique():
-                    nb_data = model_data[model_data['Neighborhood Size'] == nb_size]
-                    
-                    # Normalize each metric to [0, 1] and sum
-                    score = 0
-                    for metric in metric_cols:
-                        if metric in nb_data.columns:
-                            metric_values = df[df['Model Type'] == model_type][metric]
-                            min_val, max_val = metric_values.min(), metric_values.max()
-                            if max_val > min_val:
-                                normalized = (nb_data[metric].mean() - min_val) / (max_val - min_val)
-                                score += normalized
-                    
-                    normalized_scores[(model_type, nb_size)] = score
-            
-            best_config = min(normalized_scores.items(), key=lambda x: x[1])
-            f.write(f"\nBest overall configuration: {best_config[0][0]} with NB={best_config[0][1]}\n")
-            f.write(f"(Based on normalized sum of all metrics)\n\n")
-            
-            f.write("Key Findings:\n")
-            f.write("1. Analyze the statistical significance tests to determine if differences are meaningful\n")
-            f.write("2. Consider computational cost vs. performance gain\n")
-            f.write("3. Check if larger neighborhoods provide consistent improvements across all metrics\n")
-            f.write("4. Evaluate if the improvement justifies the increased computational cost\n")
-        
-        print(f"Report saved to {output_path}")
 
 
 def main():
@@ -1140,9 +815,6 @@ def main():
     print("PERFORMING COMPREHENSIVE ANALYSIS")
     print("="*60)
     
-    # Statistical tests
-    stat_results = analyzer.statistical_tests()
-    
     # Trend analysis
     trend_df = analyzer.performance_trend_analysis()
     trend_path = analyzer.base_dir / "performance_trends.csv"
@@ -1159,11 +831,9 @@ def main():
     if not args.skip_plots:
         analyzer.create_visualizations()
     
-    # Generate report
-    analyzer.generate_report()
     
     print("\n" + "="*60)
-    print("ANALYSIS COMPLETE!")
+    print("Analysis completed")
     print("="*60)
     print(f"\nResults saved in: {analyzer.base_dir}")
     print("\nKey files generated:")
