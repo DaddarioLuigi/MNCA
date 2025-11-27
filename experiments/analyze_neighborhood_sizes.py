@@ -21,6 +21,8 @@ import json
 import time
 from pathlib import Path
 from scipy import stats
+from scipy.stats import kruskal, mannwhitneyu
+from itertools import combinations
 import plotly.graph_objects as go
 import plotly.express as px
 from plotly.subplots import make_subplots
@@ -488,11 +490,87 @@ class NeighborhoodSizeAnalyzer:
         
         return pd.DataFrame(trend_results)
     
-    def computational_complexity_analysis(self, n_samples: int = 5) -> pd.DataFrame:
-        """Measure computational time for different neighborhood sizes"""
+    def computational_complexity_analysis(self, n_samples: int = 5, 
+                                         model_type: str = "standard") -> pd.DataFrame:
+        """
+        Measure computational time for different neighborhood sizes
+        
+        Args:
+            n_samples: Number of samples to average over
+            model_type: Type of model to analyze. Options:
+                - "standard": Standard NCA
+                - "nca_with_noise": NCA with Noise
+                - "mixture": Mixture NCA
+                - "stochastic": Stochastic Mixture NCA
+        """
         print(f"\n{'='*60}")
-        print("Computational Complexity Analysis")
+        print(f"Computational Complexity Analysis - {model_type.upper()}")
         print(f"{'='*60}\n")
+        
+        # Map model type to file name and model class
+        model_configs = {
+            "standard": {
+                "file": "standard_nca.pt",
+                "model_class": ExtendedNCA,
+                "init_kwargs": {
+                    "update_net": classification_update_net(6 * 3, n_channels_out=6, device=self.device),
+                    "hidden_dim": self.HIDDEN_DIM,
+                    "maintain_seed": False,
+                    "use_alive_mask": False,
+                    "state_dim": self.STATE_DIM,
+                    "residual": False
+                }
+            },
+            "nca_with_noise": {
+                "file": "nca_with_noise.pt",
+                "model_class": ExtendedNCA,
+                "init_kwargs": {
+                    "update_net": classification_update_net(6 * 3, n_channels_out=6 * 2, device=self.device),
+                    "hidden_dim": self.HIDDEN_DIM,
+                    "maintain_seed": False,
+                    "use_alive_mask": False,
+                    "state_dim": self.STATE_DIM,
+                    "residual": False,
+                    "distribution": "normal"
+                },
+                "post_init": lambda model: setattr(model, 'random_updates', True)
+            },
+            "mixture": {
+                "file": "mixture_nca.pt",
+                "model_class": ExtendedMixtureNCA,
+                "init_kwargs": {
+                    "update_nets": lambda n_channels, hidden_dims=128, n_channels_out=None, device_arg=None: 
+                        classification_update_net(n_channels, hidden_dims, n_channels_out, device=self.device),
+                    "num_rules": self.N_RULES,
+                    "hidden_dim": self.HIDDEN_DIM,
+                    "maintain_seed": False,
+                    "use_alive_mask": False,
+                    "state_dim": self.STATE_DIM,
+                    "residual": False,
+                    "temperature": 5
+                }
+            },
+            "stochastic": {
+                "file": "stochastic_mix_nca.pt",
+                "model_class": ExtendedMixtureNCANoise,
+                "init_kwargs": {
+                    "update_nets": lambda n_channels, hidden_dims=128, n_channels_out=None, device_arg=None: 
+                        classification_update_net(n_channels, hidden_dims, n_channels_out, device=self.device),
+                    "num_rules": self.N_RULES,
+                    "hidden_dim": self.HIDDEN_DIM,
+                    "maintain_seed": False,
+                    "use_alive_mask": False,
+                    "state_dim": self.STATE_DIM,
+                    "residual": False,
+                    "temperature": 3
+                }
+            }
+        }
+        
+        if model_type not in model_configs:
+            raise ValueError(f"Unknown model_type: {model_type}. Must be one of {list(model_configs.keys())}")
+        
+        config = model_configs[model_type]
         
         complexity_results = []
         
@@ -506,32 +584,44 @@ class NeighborhoodSizeAnalyzer:
         # Get a sample initial state
         initial_state = grid_to_channels_batch([self.histories[0][0]], len(ComplexCellType), self.device)
         
+        # Store baseline time (NB=3) for normalization
+        baseline_time = None
+        
         for nb_size in [3, 4, 5, 6, 7]:
             exp_dir = self.base_dir / f"NB_{nb_size}"
             if not exp_dir.exists():
                 continue
             
-            print(f"Testing NB_{nb_size}...")
+            model_file = exp_dir / config["file"]
+            if not model_file.exists():
+                print(f"  Skipping NB_{nb_size}: {config['file']} not found")
+                continue
             
-            # Initialize model
-            nca = ExtendedNCA(
-                update_net=classification_update_net(6 * 3, n_channels_out=6, device=self.device),
-                hidden_dim=self.HIDDEN_DIM,
-                maintain_seed=False,
-                use_alive_mask=False,
-                state_dim=self.STATE_DIM,
-                residual=False,
-                neighborhood_size=nb_size,
-                device=self.device
-            )
+            print(f"Testing NB_{nb_size} ({model_type})...")
             
-            nca.load_state_dict(torch.load(exp_dir / 'standard_nca.pt', map_location=self.device, weights_only=True))
-            nca = nca.to(self.device)
-            nca.eval()
+            # Initialize model with correct type
+            init_kwargs = config["init_kwargs"].copy()
+            init_kwargs["neighborhood_size"] = nb_size
+            init_kwargs["device"] = self.device
+            
+            # Handle update_nets for mixture models
+            if model_type in ["mixture", "stochastic"]:
+                init_kwargs["update_nets"] = update_net_fn
+            
+            model = config["model_class"](**init_kwargs)
+            
+            # Post-initialization setup (e.g., for nca_with_noise)
+            if "post_init" in config:
+                config["post_init"](model)
+            
+            # Load weights
+            model.load_state_dict(torch.load(model_file, map_location=self.device, weights_only=True))
+            model = model.to(self.device)
+            model.eval()
             
             # Warm-up
             with torch.no_grad():
-                _ = nca(initial_state, 5, return_history=False)
+                _ = model(initial_state, 5, return_history=False)
             
             # Measure time
             times = []
@@ -543,7 +633,7 @@ class NeighborhoodSizeAnalyzer:
                 
                 start_time = time.time()
                 with torch.no_grad():
-                    _ = nca(initial_state, n_steps, return_history=False)
+                    _ = model(initial_state, n_steps, return_history=False)
                 
                 if self.device == "cuda":
                     torch.cuda.synchronize()
@@ -554,21 +644,38 @@ class NeighborhoodSizeAnalyzer:
             mean_time = np.mean(times)
             std_time = np.std(times)
             
-            # Theoretical complexity: O(nb_size^2) for convolution
+            # Theoretical complexity: O(nb_size^2) for 2D convolution
+            # Explanation: For each pixel in the grid (H×W pixels), we perform a convolution
+            # with a kernel of size nb_size × nb_size. The number of operations per pixel
+            # is proportional to nb_size², so total complexity is O(H × W × nb_size²).
+            # For fixed grid size, this simplifies to O(nb_size²).
             theoretical_ops = nb_size ** 2
             
+            # Store baseline time from NB=3 for normalization
+            if nb_size == 3:
+                baseline_time = mean_time
+            
+            # Normalize time relative to NB=3 baseline (if available)
+            if baseline_time is not None:
+                normalized_time = mean_time / baseline_time
+            else:
+                normalized_time = np.nan
+            
             complexity_results.append({
+                'Model Type': model_type,
                 'Neighborhood Size': nb_size,
                 'Mean Time (s)': mean_time,
                 'Std Time (s)': std_time,
                 'Time per Step (ms)': mean_time / n_steps * 1000,
                 'Theoretical O(n²)': theoretical_ops,
-                'Normalized Time': mean_time / (3**2)  # Normalize to NB=3
+                'Normalized Time': normalized_time  # Normalized to NB=3 actual time
             })
             
             print(f"  Mean time: {mean_time:.4f} ± {std_time:.4f} s")
             print(f"  Time per step: {mean_time/n_steps*1000:.2f} ms")
             print(f"  Theoretical complexity factor: {theoretical_ops / (3**2):.2f}x")
+            if baseline_time is not None and nb_size > 3:
+                print(f"  Actual speedup vs NB=3: {baseline_time/mean_time:.2f}x")
             print()
         
         return pd.DataFrame(complexity_results)
@@ -770,6 +877,154 @@ class NeighborhoodSizeAnalyzer:
         print(f"Saved: {filename}")
         
         print(f"\nAll visualizations saved to {output_dir}")
+    
+    def statistical_significance_tests(self, alpha: float = 0.05, 
+                                       correction_method: str = 'bonferroni') -> pd.DataFrame:
+        """
+        Perform statistical significance tests to compare neighborhood sizes
+        
+        Args:
+            alpha: Significance level (default 0.05)
+            correction_method: Multiple comparison correction method ('bonferroni' or 'fdr_bh')
+        
+        Returns:
+            DataFrame with test results
+        """
+        print(f"\n{'='*60}")
+        print("Statistical Significance Tests")
+        print(f"{'='*60}\n")
+        
+        # Load raw data from pickle files
+        raw_data_list = []
+        for nb_size in [3, 4, 5, 6, 7]:
+            exp_dir = self.base_dir / f"NB_{nb_size}"
+            raw_data_path = exp_dir / 'raw_metrics_data.pkl'
+            if raw_data_path.exists():
+                import pickle
+                with open(raw_data_path, 'rb') as f:
+                    raw_data = pickle.load(f)
+                    raw_data_list.append(pd.DataFrame(raw_data))
+        
+        if not raw_data_list:
+            print("Warning: No raw data found. Please run load_or_evaluate_models() first.")
+            return pd.DataFrame()
+        
+        raw_df = pd.concat(raw_data_list, ignore_index=True)
+        
+        metric_cols = ['KL Divergence', 'Chi-Square', 'Categorical MMD', 
+                      'Tumor Size Diff', 'Border Size Diff', 'Spatial Variance Diff']
+        
+        test_results = []
+        
+        for model_type in raw_df['Model Type'].unique():
+            model_data = raw_df[raw_df['Model Type'] == model_type]
+            
+            for metric in metric_cols:
+                if metric not in model_data.columns:
+                    continue
+                
+                # Group by neighborhood size
+                groups = []
+                nb_sizes = []
+                for nb_size in sorted(model_data['Neighborhood Size'].unique()):
+                    group_data = model_data[model_data['Neighborhood Size'] == nb_size][metric].values
+                    # Remove NaN values
+                    group_data = group_data[~np.isnan(group_data)]
+                    if len(group_data) > 0:
+                        groups.append(group_data)
+                        nb_sizes.append(nb_size)
+                
+                if len(groups) < 2:
+                    continue
+                
+                # Kruskal-Wallis test (non-parametric ANOVA)
+                try:
+                    h_stat, p_value_kw = kruskal(*groups)
+                    
+                    # Significance stars
+                    if p_value_kw < 0.001:
+                        sig_stars = "***"
+                    elif p_value_kw < 0.01:
+                        sig_stars = "**"
+                    elif p_value_kw < 0.05:
+                        sig_stars = "*"
+                    else:
+                        sig_stars = ""
+                    
+                    test_results.append({
+                        'Model Type': model_type,
+                        'Metric': metric,
+                        'Test': 'Kruskal-Wallis',
+                        'H_statistic': h_stat,
+                        'p_value': p_value_kw,
+                        'Significant': p_value_kw < alpha,
+                        'Significance': sig_stars
+                    })
+                    
+                    # Post-hoc pairwise comparisons (Mann-Whitney U)
+                    if p_value_kw < alpha and len(groups) > 2:
+                        n_comparisons = len(list(combinations(range(len(nb_sizes)), 2)))
+                        alpha_corrected = alpha / n_comparisons if correction_method == 'bonferroni' else alpha
+                        
+                        for i, j in combinations(range(len(nb_sizes)), 2):
+                            try:
+                                u_stat, p_value_mw = mannwhitneyu(groups[i], groups[j], alternative='two-sided')
+                                
+                                # Apply correction
+                                if correction_method == 'bonferroni':
+                                    p_value_corrected = min(p_value_mw * n_comparisons, 1.0)
+                                else:
+                                    p_value_corrected = p_value_mw
+                                
+                                if p_value_corrected < 0.001:
+                                    sig_stars = "***"
+                                elif p_value_corrected < 0.01:
+                                    sig_stars = "**"
+                                elif p_value_corrected < 0.05:
+                                    sig_stars = "*"
+                                else:
+                                    sig_stars = ""
+                                
+                                test_results.append({
+                                    'Model Type': model_type,
+                                    'Metric': metric,
+                                    'Test': f'Mann-Whitney U (NB{nb_sizes[i]} vs NB{nb_sizes[j]})',
+                                    'H_statistic': u_stat,
+                                    'p_value': p_value_corrected,
+                                    'Significant': p_value_corrected < alpha,
+                                    'Significance': sig_stars
+                                })
+                            except Exception as e:
+                                print(f"  Warning: Could not perform post-hoc test for {model_type} - {metric} (NB{nb_sizes[i]} vs NB{nb_sizes[j]}): {e}")
+                
+                except Exception as e:
+                    print(f"  Warning: Could not perform Kruskal-Wallis test for {model_type} - {metric}: {e}")
+        
+        results_df = pd.DataFrame(test_results)
+        
+        # Print summary
+        print("Kruskal-Wallis Tests (Overall differences):")
+        print("-" * 60)
+        kw_results = results_df[results_df['Test'] == 'Kruskal-Wallis']
+        for _, row in kw_results.iterrows():
+            print(f"{row['Model Type']} - {row['Metric']}:")
+            print(f"  H={row['H_statistic']:.4f}, p={row['p_value']:.6f} {row['Significance']}")
+            print(f"  Significant: {'Yes' if row['Significant'] else 'No'}")
+            print()
+        
+        print("\nPost-hoc Pairwise Comparisons (Mann-Whitney U):")
+        print("-" * 60)
+        posthoc_results = results_df[results_df['Test'] != 'Kruskal-Wallis']
+        if len(posthoc_results) > 0:
+            for _, row in posthoc_results.iterrows():
+                if row['Significant']:
+                    print(f"{row['Model Type']} - {row['Metric']}: {row['Test']}")
+                    print(f"  U={row['H_statistic']:.4f}, p={row['p_value']:.6f} {row['Significance']}")
+                    print()
+        else:
+            print("No significant pairwise differences found.")
+        
+        return results_df
 
 
 def main():
