@@ -13,6 +13,105 @@ from mix_NCA.ExtendedMixtureNCA import ExtendedMixtureNCA
 from mix_NCA.ExtendedMixtureNCANoise import ExtendedMixtureNCANoise
 from mix_NCA.BiologicalMetrics import compare_generated_distributions
 from mix_NCA.TissueModel import ComplexCellType
+import matplotlib.pyplot as plt
+import matplotlib.animation as animation
+from pathlib import Path
+
+
+def _generate_videos_for_models(models, histories, n_steps, nb_size, output_dir, device, n_samples=3):
+    """
+    Generate videos showing the evolution of NCA models
+    
+    Args:
+        models: Dictionary of model name -> model instance
+        histories: List of true state histories
+        n_steps: Number of steps to simulate
+        nb_size: Neighborhood size
+        output_dir: Directory to save videos
+        device: Computing device
+        n_samples: Number of sample simulations to create videos for
+    """
+    try:
+        import matplotlib
+        matplotlib.use('Agg')  # Use non-interactive backend
+    except ImportError:
+        print("Warning: matplotlib not available, skipping video generation")
+        return
+    
+    video_dir = Path(output_dir) / 'videos' / f'steps_{n_steps}'
+    video_dir.mkdir(parents=True, exist_ok=True)
+    
+    # Select a few sample histories
+    sample_indices = np.linspace(0, len(histories) - 1, min(n_samples, len(histories)), dtype=int)
+    
+    for model_name, model in models.items():
+        print(f"      Generating video for {model_name}...")
+        
+        for sample_idx in sample_indices:
+            # Get initial state
+            grid_state = histories[sample_idx][0]
+            initial_state = grid_to_channels_batch([grid_state], len(ComplexCellType), device)
+            
+            # Run simulation and collect history
+            model.eval()
+            with torch.no_grad():
+                result = model(initial_state, n_steps, return_history=True)
+                
+                if isinstance(result, tuple):
+                    frames = result[1] if len(result[1]) > 0 else [result[0]]
+                else:
+                    frames = result if isinstance(result, list) else [result]
+            
+            # Convert frames to numpy arrays (cell type classifications)
+            frame_images = []
+            for frame in frames:
+                if isinstance(frame, torch.Tensor):
+                    # Get cell type classification
+                    cell_types = frame.argmax(dim=1).cpu().numpy()
+                    if len(cell_types.shape) == 3:
+                        cell_types = cell_types[0]  # Remove batch dimension
+                    frame_images.append(cell_types)
+            
+            if len(frame_images) == 0:
+                continue
+            
+            # Create color map for cell types
+            n_cell_types = len(ComplexCellType)
+            colors = plt.cm.tab10(np.linspace(0, 1, n_cell_types))
+            cmap = plt.cm.colors.ListedColormap(colors)
+            
+            # Create animation
+            fig, ax = plt.subplots(figsize=(8, 8))
+            ax.axis('off')
+            
+            im = ax.imshow(frame_images[0], cmap=cmap, vmin=0, vmax=n_cell_types-1, animated=True)
+            
+            def update_frame(frame_num):
+                im.set_array(frame_images[min(frame_num, len(frame_images)-1)])
+                ax.set_title(f'{model_name} - Step {min(frame_num, len(frame_images)-1)}/{len(frame_images)-1}\nNB={nb_size}')
+                return [im]
+            
+            anim = animation.FuncAnimation(
+                fig, update_frame, frames=len(frame_images),
+                interval=100, blit=True, repeat=True
+            )
+            
+            # Save video
+            video_path = video_dir / f'{model_name}_sample_{sample_idx}_nb_{nb_size}.mp4'
+            try:
+                anim.save(str(video_path), writer='ffmpeg', fps=10, bitrate=1800)
+                print(f"        Saved: {video_path}")
+            except Exception as e:
+                print(f"        Warning: Could not save video {video_path}: {e}")
+                # Fallback: save as GIF
+                try:
+                    gif_path = video_path.with_suffix('.gif')
+                    anim.save(str(gif_path), writer='pillow', fps=10)
+                    print(f"        Saved as GIF: {gif_path}")
+                except Exception as e2:
+                    print(f"        Error saving GIF: {e2}")
+            
+            plt.close(fig)
 
 
 def get_device(device_preference="auto"):
@@ -43,8 +142,9 @@ def get_device(device_preference="auto"):
 
 
 def run_experiment(histories_path, output_dir, neighborhood_sizes,
-                   n_epochs=800, time_length=35, update_every=1,
-                   n_cell_types=6, device="auto", n_evaluations=10):
+                   n_epochs=800, time_length=500, update_every=1,
+                   n_cell_types=6, device="auto", n_evaluations=10,
+                   step_lengths=[35, 100, 500], generate_videos=False):
     """
     Train and evaluate NCA models with different neighborhood sizes on biological simulations
     
@@ -251,32 +351,59 @@ def run_experiment(histories_path, output_dir, neighborhood_sizes,
             torch.save(stochastic_mix_nca.state_dict(), stoch_path)
             print(f"Saved Stochastic Mixture NCA to {stoch_path}")
         
-        # Evaluation: Compare generated distributions
+        # Evaluation: Compare generated distributions for each step length
         print(f"\nEvaluating models (nb={nb_size})...")
         
-        # Compare distributions
-        results_df = compare_generated_distributions(
-            histories=histories,
-            standard_nca=nca.to(device),
-            mixture_nca=mix_nca.to(device),
-            stochastic_nca=stochastic_mix_nca.to(device),
-            nca_with_noise=nca_with_noise.to(device),
-            n_steps=35,
-            n_evaluations=n_evaluations,
-            device=device,
-            deterministic_rule_choice=False
-        )
+        all_step_results = []
         
-        # Add neighborhood size column
-        results_df['Neighborhood Size'] = nb_size
+        for n_steps in step_lengths:
+            print(f"\n  Evaluating with {n_steps} steps...")
+            
+            # Compare distributions
+            results_df = compare_generated_distributions(
+                histories=histories,
+                standard_nca=nca.to(device),
+                mixture_nca=mix_nca.to(device),
+                stochastic_nca=stochastic_mix_nca.to(device),
+                nca_with_noise=nca_with_noise.to(device),
+                n_steps=n_steps,
+                n_evaluations=n_evaluations,
+                device=device,
+                deterministic_rule_choice=False
+            )
+            
+            # Add neighborhood size and step length columns
+            results_df['Neighborhood Size'] = nb_size
+            results_df['Step Length'] = n_steps
+            all_step_results.append(results_df)
+            
+            # Generate video if requested
+            if generate_videos:
+                print(f"    Generating videos for {n_steps} steps...")
+                _generate_videos_for_models(
+                    models={
+                        'standard_nca': nca.to(device),
+                        'mixture_nca': mix_nca.to(device),
+                        'stochastic_nca': stochastic_mix_nca.to(device),
+                        'nca_with_noise': nca_with_noise.to(device)
+                    },
+                    histories=histories,
+                    n_steps=n_steps,
+                    nb_size=nb_size,
+                    output_dir=exp_dir,
+                    device=device
+                )
+        
+        # Combine results from all step lengths
+        combined_results = pd.concat(all_step_results, ignore_index=True)
         
         # Save results
         results_path = os.path.join(exp_dir, 'biological_metrics.csv')
-        results_df.to_csv(results_path, index=False)
+        combined_results.to_csv(results_path, index=False)
         print(f"Saved metrics to {results_path}")
         
         # Store for aggregation
-        all_results[nb_size] = results_df
+        all_results[nb_size] = combined_results
         
         # Save models summary
         summary = {
@@ -324,8 +451,8 @@ if __name__ == "__main__":
                         help='Comma-separated list of neighborhood sizes, e.g. 3,4,5,6,7')
     parser.add_argument('--n_epochs', type=int, default=800,
                         help='Number of training epochs')
-    parser.add_argument('--time_length', type=int, default=35,
-                        help='Length of training window')
+    parser.add_argument('--time_length', type=int, default=500,
+                        help='Length of training window (default: 500)')
     parser.add_argument('--update_every', type=int, default=1,
                         help='Steps between updates')
     parser.add_argument('--n_cell_types', type=int, default=6,
@@ -334,12 +461,18 @@ if __name__ == "__main__":
                         help='Computing device (auto, cuda, mps, or cpu). "auto" will select the best available device.')
     parser.add_argument('--n_evaluations', type=int, default=10,
                         help='Number of evaluations for stochastic models')
+    parser.add_argument('--step_lengths', type=str, default='35,100,500',
+                        help='Comma-separated list of step lengths to test (default: 35,100,500)')
+    parser.add_argument('--generate_videos', action='store_true',
+                        help='Generate videos of model evolution')
     args = parser.parse_args()
     
     sizes = [int(s.strip()) for s in args.neighborhood_sizes.split(',') if s.strip()]
     for s in sizes:
-        if s not in (3, 4, 5, 6, 7):
-            raise ValueError(f"Unsupported neighborhood size: {s}. Supported: 3,4,5,6,7")
+        if s not in (1, 2, 3, 4, 5, 6, 7):
+            raise ValueError(f"Unsupported neighborhood size: {s}. Supported: 1,2,3,4,5,6,7")
+    
+    step_lengths = [int(s.strip()) for s in args.step_lengths.split(',') if s.strip()]
     
     run_experiment(
         histories_path=args.histories_path,
@@ -350,6 +483,8 @@ if __name__ == "__main__":
         update_every=args.update_every,
         n_cell_types=args.n_cell_types,
         device=args.device,
-        n_evaluations=args.n_evaluations
+        n_evaluations=args.n_evaluations,
+        step_lengths=step_lengths,
+        generate_videos=args.generate_videos
     )
 
