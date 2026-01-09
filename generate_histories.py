@@ -12,7 +12,7 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '.')))
 from mix_NCA.TissueModel import create_complex_model_example
 
-def generate_histories(output_path='notebooks/histories.npy', n_simulations=200, n_steps=35):
+def generate_histories(output_path='notebooks/histories.npy', n_simulations=1000, n_steps=500):
     """
     Generate histories.npy file by running tissue simulations.
     
@@ -47,10 +47,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Generate histories.npy file for tissue simulations')
     parser.add_argument('--output_path', type=str, default='notebooks/histories.npy',
                         help='Path where to save histories.npy (default: notebooks/histories.npy)')
-    parser.add_argument('--n_simulations', type=int, default=200,
-                        help='Number of simulations to run (default: 200)')
-    parser.add_argument('--n_steps', type=int, default=35,
-                        help='Number of steps per simulation (default: 35)')
+    parser.add_argument('--n_simulations', type=int, default=1000,
+                        help='Number of simulations to run (default: 1000)')
+    parser.add_argument('--n_steps', type=int, default=500,
+                        help='Number of steps per simulation (default: 500)')
     
     args = parser.parse_args()
     

@@ -192,6 +192,32 @@ notebooks/visium_mouse_analysis.ipynb
 notebooks/test_multirule_NCA.ipynb
 notebooks/plots_paper.ipynb
 
+*.aux
+*.dvi
+*.log
+*.idx
+*.ind
+*.toc
+*.ilg
+*.out
+*.bbl
+*.blg
+*.nav
+*.snm
+*.lof
+*.lot
+*.atfi
+*~
+*.vrb
+*.backup
+*.bak
+*.ps
+*.pdf
+.*.swp
+*.synctex.gz
+.directory
+
+
 
 
 

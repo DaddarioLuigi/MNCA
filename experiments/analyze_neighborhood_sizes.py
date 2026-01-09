@@ -21,7 +21,7 @@ import json
 import time
 from pathlib import Path
 from scipy import stats
-from scipy.stats import kruskal, mannwhitneyu
+from scipy.stats import kruskal, mannwhitneyu, norm
 from itertools import combinations
 import plotly.graph_objects as go
 import plotly.express as px
@@ -43,7 +43,8 @@ class NeighborhoodSizeAnalyzer:
     """Comprehensive analyzer for neighborhood size experiments"""
     
     def __init__(self, results_dir: str, histories_path: str, 
-                 device: str = "auto", n_evaluations: int = 10):
+                 device: str = "auto", n_evaluations: int = 10,
+                 step_lengths: List[int] = [35, 100, 500]):
         """
         Initialize analyzer
         
@@ -57,6 +58,7 @@ class NeighborhoodSizeAnalyzer:
         self.histories_path = histories_path
         self.device = get_device(device)
         self.n_evaluations = n_evaluations
+        self.step_lengths = step_lengths if isinstance(step_lengths, list) else [step_lengths]
         self.base_dir = self.results_dir / "tissue_simulation_extended"
         
         # Hyperparameters (should match training)
@@ -73,7 +75,7 @@ class NeighborhoodSizeAnalyzer:
         self.metrics_data = {}
         self.computational_times = {}
         
-    def load_or_evaluate_models(self, neighborhood_sizes: List[int] = [3, 4, 5, 6, 7],
+    def load_or_evaluate_models(self, neighborhood_sizes: List[int] = [1, 2, 3, 4, 5, 6, 7],
                                 force_recompute: bool = False):
         """
         Load existing metrics or evaluate models to compute metrics
@@ -227,6 +229,7 @@ class NeighborhoodSizeAnalyzer:
         raw_data = {
             'Model Type': [],
             'Neighborhood Size': [],
+            'Step Length': [],
             'Evaluation': [],
             'KL Divergence': [],
             'Chi-Square': [],
@@ -236,78 +239,84 @@ class NeighborhoodSizeAnalyzer:
             'Spatial Variance Diff': []
         }
         
-        # Evaluate Standard NCA (deterministic, evaluate multiple times for consistency)
-        with torch.no_grad():
-            for eval_idx in range(self.n_evaluations):
-                standard_samples = []
-                for true_state in initial_states:
-                    result = nca(true_state, 35, return_history=True)
-                    if isinstance(result, tuple):
-                        sample = result[1][-1] if len(result[1]) > 0 else result[0]
-                    else:
-                        sample = result[-1]
-                    standard_samples.append(sample.argmax(dim=1))
-                standard_gen = torch.stack(standard_samples).squeeze(1)
-                
-                bio_metrics = BiologicalMetrics(true_dataset, standard_gen, list(ComplexCellType), self.device)
-                dist_metrics = bio_metrics.distribution_metrics()
-                spatial_metrics = bio_metrics.spatial_correlation()
-                
-                raw_data['Model Type'].append('Standard NCA')
-                raw_data['Neighborhood Size'].append(nb_size)
-                raw_data['Evaluation'].append(eval_idx)
-                raw_data['KL Divergence'].append(dist_metrics['kl_divergence'])
-                raw_data['Chi-Square'].append(dist_metrics['chi_square'])
-                raw_data['Categorical MMD'].append(dist_metrics['categorical_mmd'])
-                raw_data['Tumor Size Diff'].append(bio_metrics.tumor_size_distribution())
-                raw_data['Border Size Diff'].append(spatial_metrics['border_size_diff'])
-                raw_data['Spatial Variance Diff'].append(spatial_metrics['spatial_variance_diff'])
-        
-        # Evaluate stochastic models
-        for name, model in [
-            ('Mixture NCA', mix_nca),
-            ('Stochastic Mixture NCA', stochastic_mix_nca),
-            ('NCA with Noise', nca_with_noise)
-        ]:
-            for eval_idx in range(self.n_evaluations):
-                torch.manual_seed(eval_idx)
-                with torch.no_grad():
-                    samples = []
+        # Evaluate for each step length
+        for n_steps in self.step_lengths:
+            print(f"    Evaluating with {n_steps} steps...")
+            
+            # Evaluate Standard NCA (deterministic, evaluate multiple times for consistency)
+            with torch.no_grad():
+                for eval_idx in range(self.n_evaluations):
+                    standard_samples = []
                     for true_state in initial_states:
-                        if name == 'NCA with Noise':
-                            result = model(true_state, 35, return_history=True)
-                            if isinstance(result, tuple):
-                                sample = result[1][-1] if len(result[1]) > 0 else result[0]
-                            else:
-                                sample = result[-1]
-                            sample = sample.argmax(dim=1)
+                        result = nca(true_state, n_steps, return_history=True)
+                        if isinstance(result, tuple):
+                            sample = result[1][-1] if len(result[1]) > 0 else result[0]
                         else:
-                            result = model(true_state, 35, return_history=True, sample_non_differentiable=True)
-                            if isinstance(result, tuple):
-                                sample = result[1][-1] if len(result[1]) > 0 else result[0]
+                            sample = result[-1]
+                        standard_samples.append(sample.argmax(dim=1))
+                    standard_gen = torch.stack(standard_samples).squeeze(1)
+                    
+                    bio_metrics = BiologicalMetrics(true_dataset, standard_gen, list(ComplexCellType), self.device)
+                    dist_metrics = bio_metrics.distribution_metrics()
+                    spatial_metrics = bio_metrics.spatial_correlation()
+                    
+                    raw_data['Model Type'].append('Standard NCA')
+                    raw_data['Neighborhood Size'].append(nb_size)
+                    raw_data['Step Length'].append(n_steps)
+                    raw_data['Evaluation'].append(eval_idx)
+                    raw_data['KL Divergence'].append(dist_metrics['kl_divergence'])
+                    raw_data['Chi-Square'].append(dist_metrics['chi_square'])
+                    raw_data['Categorical MMD'].append(dist_metrics['categorical_mmd'])
+                    raw_data['Tumor Size Diff'].append(bio_metrics.tumor_size_distribution())
+                    raw_data['Border Size Diff'].append(spatial_metrics['border_size_diff'])
+                    raw_data['Spatial Variance Diff'].append(spatial_metrics['spatial_variance_diff'])
+            
+            # Evaluate stochastic models
+            for name, model in [
+                ('Mixture NCA', mix_nca),
+                ('Stochastic Mixture NCA', stochastic_mix_nca),
+                ('NCA with Noise', nca_with_noise)
+            ]:
+                for eval_idx in range(self.n_evaluations):
+                    torch.manual_seed(eval_idx)
+                    with torch.no_grad():
+                        samples = []
+                        for true_state in initial_states:
+                            if name == 'NCA with Noise':
+                                result = model(true_state, n_steps, return_history=True)
+                                if isinstance(result, tuple):
+                                    sample = result[1][-1] if len(result[1]) > 0 else result[0]
+                                else:
+                                    sample = result[-1]
+                                sample = sample.argmax(dim=1)
                             else:
-                                sample = result[-1]
-                            sample = sample.argmax(dim=1)
-                        samples.append(sample)
-                    generated = torch.stack(samples).squeeze(1)
-                
-                bio_metrics = BiologicalMetrics(true_dataset, generated, list(ComplexCellType), self.device)
-                dist_metrics = bio_metrics.distribution_metrics()
-                spatial_metrics = bio_metrics.spatial_correlation()
-                
-                raw_data['Model Type'].append(name)
-                raw_data['Neighborhood Size'].append(nb_size)
-                raw_data['Evaluation'].append(eval_idx)
-                raw_data['KL Divergence'].append(dist_metrics['kl_divergence'])
-                raw_data['Chi-Square'].append(dist_metrics['chi_square'])
-                raw_data['Categorical MMD'].append(dist_metrics['categorical_mmd'])
-                raw_data['Tumor Size Diff'].append(bio_metrics.tumor_size_distribution())
-                raw_data['Border Size Diff'].append(spatial_metrics['border_size_diff'])
-                raw_data['Spatial Variance Diff'].append(spatial_metrics['spatial_variance_diff'])
+                                result = model(true_state, n_steps, return_history=True, sample_non_differentiable=True)
+                                if isinstance(result, tuple):
+                                    sample = result[1][-1] if len(result[1]) > 0 else result[0]
+                                else:
+                                    sample = result[-1]
+                                sample = sample.argmax(dim=1)
+                            samples.append(sample)
+                        generated = torch.stack(samples).squeeze(1)
+                    
+                    bio_metrics = BiologicalMetrics(true_dataset, generated, list(ComplexCellType), self.device)
+                    dist_metrics = bio_metrics.distribution_metrics()
+                    spatial_metrics = bio_metrics.spatial_correlation()
+                    
+                    raw_data['Model Type'].append(name)
+                    raw_data['Neighborhood Size'].append(nb_size)
+                    raw_data['Step Length'].append(n_steps)
+                    raw_data['Evaluation'].append(eval_idx)
+                    raw_data['KL Divergence'].append(dist_metrics['kl_divergence'])
+                    raw_data['Chi-Square'].append(dist_metrics['chi_square'])
+                    raw_data['Categorical MMD'].append(dist_metrics['categorical_mmd'])
+                    raw_data['Tumor Size Diff'].append(bio_metrics.tumor_size_distribution())
+                    raw_data['Border Size Diff'].append(spatial_metrics['border_size_diff'])
+                    raw_data['Spatial Variance Diff'].append(spatial_metrics['spatial_variance_diff'])
         
         # Create summary DataFrame (for compatibility)
         raw_df = pd.DataFrame(raw_data)
-        summary_df = raw_df.groupby(['Model Type']).agg({
+        summary_df = raw_df.groupby(['Model Type', 'Step Length']).agg({
             'KL Divergence': ['mean', 'std'],
             'Chi-Square': ['mean', 'std'],
             'Categorical MMD': ['mean', 'std'],
@@ -323,6 +332,7 @@ class NeighborhoodSizeAnalyzer:
         # Format for output (matching original format)
         results_dict = {
             'Model Type': [],
+            'Step Length': [],
             'KL Divergence': [],
             'KL Divergence SD': [],
             'Chi-Square': [],
@@ -338,14 +348,19 @@ class NeighborhoodSizeAnalyzer:
         }
         
         for model_type in raw_df['Model Type'].unique():
-            model_data = raw_df[raw_df['Model Type'] == model_type]
-            results_dict['Model Type'].append(model_type)
-            for metric in ['KL Divergence', 'Chi-Square', 'Categorical MMD', 
-                          'Tumor Size Diff', 'Border Size Diff', 'Spatial Variance Diff']:
-                mean_val = model_data[metric].mean()
-                std_val = model_data[metric].std()
-                results_dict[metric].append(f"{mean_val:.3f}")
-                results_dict[f"{metric} SD"].append(f"±{std_val:.3f}")
+            for step_length in raw_df['Step Length'].unique():
+                model_data = raw_df[(raw_df['Model Type'] == model_type) & 
+                                   (raw_df['Step Length'] == step_length)]
+                if len(model_data) == 0:
+                    continue
+                results_dict['Model Type'].append(model_type)
+                results_dict['Step Length'].append(step_length)
+                for metric in ['KL Divergence', 'Chi-Square', 'Categorical MMD', 
+                              'Tumor Size Diff', 'Border Size Diff', 'Spatial Variance Diff']:
+                    mean_val = model_data[metric].mean()
+                    std_val = model_data[metric].std()
+                    results_dict[metric].append(f"{mean_val:.3f}")
+                    results_dict[f"{metric} SD"].append(f"±{std_val:.3f}")
         
         results_df = pd.DataFrame(results_dict)
         results_df['Neighborhood Size'] = nb_size
@@ -587,7 +602,7 @@ class NeighborhoodSizeAnalyzer:
         # Store baseline time (NB=3) for normalization
         baseline_time = None
         
-        for nb_size in [3, 4, 5, 6, 7]:
+        for nb_size in [1, 2, 3, 4, 5, 6, 7]:
             exp_dir = self.base_dir / f"NB_{nb_size}"
             if not exp_dir.exists():
                 continue
@@ -878,8 +893,100 @@ class NeighborhoodSizeAnalyzer:
         
         print(f"\nAll visualizations saved to {output_dir}")
     
+    def _calculate_effect_size_mannwhitney(self, data1: np.ndarray, data2: np.ndarray, 
+                                            u_stat: float) -> float:
+        """
+        Calculate r effect size for Mann-Whitney U test
+        
+        Uses a more robust formula that accounts for ties and complete separation.
+        For complete separation, uses rank-biserial correlation as alternative.
+        
+        r = Z / sqrt(N) where Z is derived from U statistic
+        Interpretation:
+        - |r| < 0.1: negligible
+        - 0.1 <= |r| < 0.3: small
+        - 0.3 <= |r| < 0.5: medium
+        - |r| >= 0.5: large
+        
+        Args:
+            data1: First group data
+            data2: Second group data
+            u_stat: Mann-Whitney U statistic
+            
+        Returns:
+            r effect size
+        """
+        n1, n2 = len(data1), len(data2)
+        n = n1 + n2
+        
+        # Check for complete separation
+        complete_separation = np.all(data1 < data2) or np.all(data1 > data2) or np.all(data2 < data1) or np.all(data2 > data1)
+        
+        if complete_separation:
+            # With complete separation, all values in one group are > or < all in the other
+            # Use rank-biserial correlation: r_rb = 1 - (2*U) / (n1*n2)
+            # This gives r_rb = 1.0 or -1.0 for complete separation
+            max_u = n1 * n2
+            r_rb = 1.0 - (2.0 * u_stat) / max_u
+            # Convert to absolute value for effect size interpretation
+            r = abs(r_rb)
+            # Note: With complete separation, r will always be 1.0 (maximum effect)
+            # This is mathematically correct but may appear identical across comparisons
+        else:
+            # Standard calculation with correction for ties
+            # Calculate expected U and standard deviation
+            u_expected = n1 * n2 / 2.0
+            
+            # Account for ties in standard deviation calculation
+            all_data = np.concatenate([data1, data2])
+            unique_vals, counts = np.unique(all_data, return_counts=True)
+            tie_correction = np.sum(counts * (counts**2 - 1)) if len(unique_vals) < n else 0
+            
+            if tie_correction > 0:
+                u_std = np.sqrt((n1 * n2 / (n * (n - 1))) * ((n**3 - n - tie_correction) / 12.0))
+            else:
+                u_std = np.sqrt(n1 * n2 * (n + 1) / 12.0)
+            
+            # Calculate Z score
+            if u_std > 0:
+                z = (u_stat - u_expected) / u_std
+            else:
+                z = 0.0
+            
+            # Calculate r effect size
+            r = abs(z) / np.sqrt(n)
+        
+        return r
+    
+    def _calculate_effect_size_kruskal(self, h_stat: float, n_total: int, k_groups: int) -> float:
+        """
+        Calculate eta-squared effect size for Kruskal-Wallis test
+        
+        eta² = (H - k + 1) / (N - k)
+        
+        Interpretation:
+        - eta² < 0.01: negligible
+        - 0.01 <= eta² < 0.06: small
+        - 0.06 <= eta² < 0.14: medium
+        - eta² >= 0.14: large
+        
+        Args:
+            h_stat: Kruskal-Wallis H statistic
+            n_total: Total number of observations
+            k_groups: Number of groups
+            
+        Returns:
+            eta-squared effect size
+        """
+        if n_total <= k_groups:
+            return 0.0
+        
+        eta_squared = (h_stat - k_groups + 1) / (n_total - k_groups)
+        return max(0.0, eta_squared)  # Ensure non-negative
+    
     def statistical_significance_tests(self, alpha: float = 0.05, 
-                                       correction_method: str = 'bonferroni') -> pd.DataFrame:
+                                       correction_method: str = 'bonferroni',
+                                       include_effect_size: bool = True) -> pd.DataFrame:
         """
         Perform statistical significance tests to compare neighborhood sizes
         
@@ -893,10 +1000,16 @@ class NeighborhoodSizeAnalyzer:
         print(f"\n{'='*60}")
         print("Statistical Significance Tests")
         print(f"{'='*60}\n")
+        print(f"Significance level (alpha): {alpha}")
+        print(f"Multiple comparison correction: {correction_method}")
+        if correction_method == 'bonferroni':
+            print(f"Note: With 5 groups, there are 10 pairwise comparisons.")
+            print(f"Bonferroni corrected alpha = {alpha}/10 = {alpha/10:.6f}")
+        print()
         
         # Load raw data from pickle files
         raw_data_list = []
-        for nb_size in [3, 4, 5, 6, 7]:
+        for nb_size in [1, 2, 3, 4, 5, 6, 7]:
             exp_dir = self.base_dir / f"NB_{nb_size}"
             raw_data_path = exp_dir / 'raw_metrics_data.pkl'
             if raw_data_path.exists():
@@ -937,9 +1050,24 @@ class NeighborhoodSizeAnalyzer:
                 if len(groups) < 2:
                     continue
                 
-                # Kruskal-Wallis test (non-parametric ANOVA)
+                # Check for zero variance (all values identical within groups)
+                zero_var_groups = []
+                for idx, (nb_size, group_data) in enumerate(zip(nb_sizes, groups)):
+                    if np.var(group_data) == 0:
+                        zero_var_groups.append(nb_size)
+                
+                if zero_var_groups:
+                    print(f"  Warning: Zero variance detected for {model_type} - {metric} in groups: {zero_var_groups}")
+                    print(f"    This may indicate deterministic behavior or insufficient variability.")
+                
+                    # Kruskal-Wallis test (non-parametric ANOVA)
                 try:
                     h_stat, p_value_kw = kruskal(*groups)
+                    
+                    # Calculate effect size for Kruskal-Wallis
+                    n_total = sum(len(g) for g in groups)
+                    k_groups = len(groups)
+                    eta_squared = self._calculate_effect_size_kruskal(h_stat, n_total, k_groups) if include_effect_size else None
                     
                     # Significance stars
                     if p_value_kw < 0.001:
@@ -951,7 +1079,7 @@ class NeighborhoodSizeAnalyzer:
                     else:
                         sig_stars = ""
                     
-                    test_results.append({
+                    result_dict = {
                         'Model Type': model_type,
                         'Metric': metric,
                         'Test': 'Kruskal-Wallis',
@@ -959,7 +1087,13 @@ class NeighborhoodSizeAnalyzer:
                         'p_value': p_value_kw,
                         'Significant': p_value_kw < alpha,
                         'Significance': sig_stars
-                    })
+                    }
+                    
+                    if include_effect_size:
+                        result_dict['Effect_Size'] = eta_squared
+                        result_dict['Effect_Size_Type'] = 'eta-squared'
+                    
+                    test_results.append(result_dict)
                     
                     # Post-hoc pairwise comparisons (Mann-Whitney U)
                     if p_value_kw < alpha and len(groups) > 2:
@@ -969,6 +1103,12 @@ class NeighborhoodSizeAnalyzer:
                         for i, j in combinations(range(len(nb_sizes)), 2):
                             try:
                                 u_stat, p_value_mw = mannwhitneyu(groups[i], groups[j], alternative='two-sided')
+                                
+                                # Check for complete separation
+                                data_i, data_j = groups[i], groups[j]
+                                complete_separation = False
+                                if np.all(data_i < data_j) or np.all(data_i > data_j):
+                                    complete_separation = True
                                 
                                 # Apply correction
                                 if correction_method == 'bonferroni':
@@ -985,15 +1125,42 @@ class NeighborhoodSizeAnalyzer:
                                 else:
                                     sig_stars = ""
                                 
-                                test_results.append({
+                                # Use alpha_corrected for significance determination (BUG FIX)
+                                is_significant = p_value_corrected < alpha_corrected
+                                
+                                # Calculate effect size for Mann-Whitney U
+                                r_effect = self._calculate_effect_size_mannwhitney(data_i, data_j, u_stat) if include_effect_size else None
+                                
+                                # For complete separation, also calculate mean difference for more informative comparison
+                                mean_diff = None
+                                if complete_separation and include_effect_size:
+                                    mean_diff = abs(np.mean(data_i) - np.mean(data_j))
+                                
+                                result_dict = {
                                     'Model Type': model_type,
                                     'Metric': metric,
                                     'Test': f'Mann-Whitney U (NB{nb_sizes[i]} vs NB{nb_sizes[j]})',
                                     'H_statistic': u_stat,
                                     'p_value': p_value_corrected,
-                                    'Significant': p_value_corrected < alpha,
+                                    'Significant': is_significant,
                                     'Significance': sig_stars
-                                })
+                                }
+                                
+                                if include_effect_size:
+                                    result_dict['Effect_Size'] = r_effect
+                                    result_dict['Effect_Size_Type'] = 'r'
+                                    if mean_diff is not None:
+                                        result_dict['Mean_Diff'] = mean_diff
+                                
+                                test_results.append(result_dict)
+                                
+                                # Warn about complete separation
+                                if complete_separation:
+                                    direction = ">" if np.all(data_i > data_j) else "<"
+                                    mean_i, mean_j = np.mean(data_i), np.mean(data_j)
+                                    print(f"  Note: Complete separation in {model_type} - {metric} (NB{nb_sizes[i]} {direction} NB{nb_sizes[j]}, "
+                                          f"mean diff={abs(mean_i-mean_j):.4f})")
+                                    
                             except Exception as e:
                                 print(f"  Warning: Could not perform post-hoc test for {model_type} - {metric} (NB{nb_sizes[i]} vs NB{nb_sizes[j]}): {e}")
                 
@@ -1010,19 +1177,61 @@ class NeighborhoodSizeAnalyzer:
             print(f"{row['Model Type']} - {row['Metric']}:")
             print(f"  H={row['H_statistic']:.4f}, p={row['p_value']:.6f} {row['Significance']}")
             print(f"  Significant: {'Yes' if row['Significant'] else 'No'}")
+            if include_effect_size and 'Effect_Size' in row and pd.notna(row['Effect_Size']):
+                eta_sq = row['Effect_Size']
+                # Interpret effect size
+                if eta_sq >= 0.14:
+                    effect_interp = "large"
+                elif eta_sq >= 0.06:
+                    effect_interp = "medium"
+                elif eta_sq >= 0.01:
+                    effect_interp = "small"
+                else:
+                    effect_interp = "negligible"
+                print(f"  Effect Size (η²)={eta_sq:.4f} ({effect_interp})")
             print()
         
         print("\nPost-hoc Pairwise Comparisons (Mann-Whitney U):")
         print("-" * 60)
         posthoc_results = results_df[results_df['Test'] != 'Kruskal-Wallis']
         if len(posthoc_results) > 0:
+            significant_count = 0
             for _, row in posthoc_results.iterrows():
                 if row['Significant']:
+                    significant_count += 1
                     print(f"{row['Model Type']} - {row['Metric']}: {row['Test']}")
                     print(f"  U={row['H_statistic']:.4f}, p={row['p_value']:.6f} {row['Significance']}")
+                    if include_effect_size and 'Effect_Size' in row and pd.notna(row['Effect_Size']):
+                        r_eff = row['Effect_Size']
+                        # Interpret effect size
+                        if r_eff >= 0.5:
+                            effect_interp = "large"
+                        elif r_eff >= 0.3:
+                            effect_interp = "medium"
+                        elif r_eff >= 0.1:
+                            effect_interp = "small"
+                        else:
+                            effect_interp = "negligible"
+                        
+                        effect_str = f"  Effect Size (r)={r_eff:.4f} ({effect_interp})"
+                        
+                        # Add note if effect size is 1.0 (complete separation)
+                        if r_eff >= 0.99:
+                            effect_str += " [complete separation - max effect]"
+                        
+                        # Add mean difference if available (more informative for complete separation)
+                        if 'Mean_Diff' in row and pd.notna(row['Mean_Diff']):
+                            effect_str += f", Mean Diff={row['Mean_Diff']:.4f}"
+                        
+                        print(effect_str)
                     print()
+            
+            if significant_count == 0:
+                print("No significant pairwise differences found (after Bonferroni correction).")
+            else:
+                print(f"Total significant comparisons: {significant_count} out of {len(posthoc_results)}")
         else:
-            print("No significant pairwise differences found.")
+            print("No pairwise comparisons performed.")
         
         return results_df
 
@@ -1042,21 +1251,25 @@ def main():
                        help='Number of evaluations for stochastic models')
     parser.add_argument('--force_recompute', action='store_true',
                        help='Force recomputation of metrics even if CSV exists')
-    parser.add_argument('--neighborhood_sizes', type=str, default='3,4,5,6,7',
+    parser.add_argument('--neighborhood_sizes', type=str, default='1,2,3,4,5,6,7',
                        help='Comma-separated list of neighborhood sizes to analyze')
+    parser.add_argument('--step_lengths', type=str, default='35,100,500',
+                       help='Comma-separated list of step lengths to test')
     parser.add_argument('--skip_plots', action='store_true',
                        help='Skip generating visualizations')
     
     args = parser.parse_args()
     
     neighborhood_sizes = [int(s.strip()) for s in args.neighborhood_sizes.split(',') if s.strip()]
+    step_lengths = [int(s.strip()) for s in args.step_lengths.split(',') if s.strip()]
     
     # Initialize analyzer
     analyzer = NeighborhoodSizeAnalyzer(
         results_dir=args.results_dir,
         histories_path=args.histories_path,
         device=args.device,
-        n_evaluations=args.n_evaluations
+        n_evaluations=args.n_evaluations,
+        step_lengths=step_lengths
     )
     
     # Load or evaluate models
