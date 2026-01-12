@@ -380,11 +380,40 @@ def plot_nca_prediction2(nca, initial_state, steps=30, plot_every=5, device="cud
     #plt.tight_layout()
     return plt
 
-def plot_automata_comparison_grid(det_nca, gca, mix_nca, stoch_mix_nca, initial_state, 
-                                n_examples=3, n_steps=35, figsize=(10, 18), 
-                                cell_type_enum=ComplexCellType, device = "cuda"):
+def plot_automata_comparison_grid(det_nca=None, gca=None, mix_nca=None, stoch_mix_nca=None, 
+                                initial_state=None, models_dict=None, n_examples=3, n_steps=35, 
+                                figsize=(10, 18), cell_type_enum=ComplexCellType, device = "cuda"):
     """
     Plot a grid comparing original tissue with predictions from different NCA models and a GCA baseline.
+    
+    Args:
+        det_nca: Deterministic NCA model (optional)
+        gca: GCA model (optional)
+        mix_nca: Mixture NCA model (optional)
+        stoch_mix_nca: Stochastic Mixture NCA model (optional)
+        initial_state: Initial state(s) for the simulation (required if models_dict not provided)
+        models_dict: Dictionary mapping model names to model instances (e.g., {'NCA': nca_model, 'MNCA': mix_nca_model})
+                    If provided, this takes precedence over individual model parameters.
+                    When using models_dict, initial_state must be provided as a keyword argument.
+        n_examples: Number of examples to show
+        n_steps: Number of simulation steps
+        figsize: Figure size
+        cell_type_enum: Enum class defining cell types
+        device: Computing device
+    
+    Note:
+        Models that use stochastic sampling (like MNCA+N) should be identified in models_dict
+        with a key that contains 'stoch' or 'stochastic', or you can pass them with the 
+        stoch_mix_nca parameter for automatic detection.
+        
+    Examples:
+        # Using individual model parameters (backward compatible)
+        plot_automata_comparison_grid(det_nca=nca, gca=gca, mix_nca=mix_nca, 
+                                     stoch_mix_nca=stoch_nca, initial_state=states)
+        
+        # Using models_dict (new flexible way)
+        plot_automata_comparison_grid(models_dict={'MNCA': mix_nca, 'MNCA+N': stoch_nca}, 
+                                     initial_state=states)
     """
     import matplotlib.pyplot as plt
     import torch
@@ -402,33 +431,70 @@ def plot_automata_comparison_grid(det_nca, gca, mix_nca, stoch_mix_nca, initial_
         'ytick.labelsize': 12
     })
 
-    # Now 5 rows: Original, NCA, GCA, MNCA, MNCA+N
-    fig, axes = plt.subplots(5, n_examples, figsize=figsize)
+    # Validate that we have at least initial_state
+    if initial_state is None:
+        raise ValueError("initial_state must be provided")
+    
+    # Build models dictionary from parameters if models_dict not provided
+    if models_dict is None:
+        models_dict = {}
+        if det_nca is not None:
+            models_dict['NCA'] = det_nca
+        if gca is not None:
+            models_dict['GCA'] = gca
+        if mix_nca is not None:
+            models_dict['MNCA'] = mix_nca
+        if stoch_mix_nca is not None:
+            models_dict['MNCA+N'] = stoch_mix_nca
+    
+    # Check if we have any models
+    if len(models_dict) == 0:
+        raise ValueError("At least one model must be provided (via models_dict or individual parameters)")
+    
+    # Determine which models use stochastic sampling
+    # Models with 'stoch' or 'stochastic' in the name, or passed as stoch_mix_nca
+    stochastic_models = set()
+    for name in models_dict.keys():
+        if 'stoch' in name.lower() or 'stochastic' in name.lower():
+            stochastic_models.add(name)
+    if stoch_mix_nca is not None and 'MNCA+N' in models_dict:
+        stochastic_models.add('MNCA+N')
+
+    # Build ordered list: Original first, then other models
+    model_list = [('Original', None)] + [(name, model) for name, model in models_dict.items()]
+    n_rows = len(model_list)
+
+    # Adjust figsize based on number of rows
+    if isinstance(figsize, tuple):
+        figsize = (figsize[0], figsize[1] * (n_rows / 5))  # Scale height proportionally
+
+    fig, axes = plt.subplots(n_rows, n_examples, figsize=figsize)
+
+    # Handle case where n_examples=1 (axes would be 1D)
+    if n_rows == 1:
+        axes = axes.reshape(1, -1)
+    elif n_examples == 1:
+        axes = axes.reshape(-1, 1)
 
     colors = [cell_type.get_color() for cell_type in cell_type_enum]
     custom_cmap = mcolors.ListedColormap(colors)
 
-    models = {
-        0: ('Original', None),
-        1: ('NCA', det_nca),
-        2: ('GCA', gca),
-        3: ('MNCA', mix_nca),
-        4: ('MNCA+N', stoch_mix_nca)
-    }
+    # Create abbreviations for labels
+    def get_abbreviation(name):
+        abbrev_map = {
+            'Original': 'O',
+            'NCA': 'NCA',
+            'GCA': 'GCA',
+            'MNCA': 'MNCA',
+            'MNCA+N': 'MNCA+N'
+        }
+        return abbrev_map.get(name, name[:4].upper())
 
-    model_abbreviations = {
-        0: 'O',
-        1: 'NCA',
-        2: 'GCA',
-        3: 'MNCA',
-        4: 'MNCA+N'
-    }
-
-    for row in range(5):
-        model_name, model = models[row]
+    for row, (model_name, model) in enumerate(model_list):
         for col in range(n_examples):
             ax = axes[row, col]
-            label = f'{model_abbreviations[row]}_{col + 1}'
+            abbrev = get_abbreviation(model_name)
+            label = f'{abbrev}_{col + 1}'
             ax.text(-0.1, 1.1, label, transform=ax.transAxes, 
                     fontsize=14, fontweight='bold')
             if row == 0:
@@ -446,16 +512,17 @@ def plot_automata_comparison_grid(det_nca, gca, mix_nca, stoch_mix_nca, initial_
                     torch.manual_seed(col)
                     current_state = grid_to_channels_batch([initial_state[col][0]], n_cell_types = len(cell_type_enum), device = device)
                     for _ in range(n_steps):
-                        if row in [3,4]:
-                            current_state = models[row][1](current_state, 1, return_history=False, sample_non_differentiable = True)
+                        # Check if this model uses stochastic sampling
+                        if model_name in stochastic_models:
+                            current_state = model(current_state, 1, return_history=False, sample_non_differentiable = True)
                         else:
-                            current_state = models[row][1](current_state, 1, return_history=False)
-                        ax.imshow(
-                            torch.argmax(current_state.squeeze(), dim=0).cpu(),
-                            cmap=custom_cmap,
-                            vmin=0,
-                            vmax=len(cell_type_enum)-1
-                        )
+                            current_state = model(current_state, 1, return_history=False)
+                    ax.imshow(
+                        torch.argmax(current_state.squeeze(), dim=0).cpu(),
+                        cmap=custom_cmap,
+                        vmin=0,
+                        vmax=len(cell_type_enum)-1
+                    )
                     if col == 0:
                         ax.set_ylabel(model_name, fontsize=14, fontweight='bold')
             ax.axis('off')
