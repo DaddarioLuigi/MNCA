@@ -120,7 +120,8 @@ class NeighborhoodSizeAnalyzer:
             raise ValueError("No results found. Please check that models exist.")
     
     def _evaluate_models(self, nb_size: int, exp_dir: Path) -> pd.DataFrame:
-        """Evaluate models for a specific neighborhood size and save raw data for statistical tests"""
+        """Evaluate models for a specific neighborhood size and save raw data for statistical tests
+        Only evaluates Mixture NCA and Stochastic Mixture NCA models."""
         
         def make_update_net_fn(device):
             def update_net_wrapper(n_channels, hidden_dims=128, n_channels_out=None, device_arg=None):
@@ -129,31 +130,7 @@ class NeighborhoodSizeAnalyzer:
         
         update_net_fn = make_update_net_fn(self.device)
         
-        # Initialize models
-        nca = ExtendedNCA(
-            update_net=classification_update_net(6 * 3, n_channels_out=6, device=self.device),
-            hidden_dim=self.HIDDEN_DIM,
-            maintain_seed=False,
-            use_alive_mask=False,
-            state_dim=self.STATE_DIM,
-            residual=False,
-            neighborhood_size=nb_size,
-            device=self.device
-        )
-        
-        nca_with_noise = ExtendedNCA(
-            update_net=classification_update_net(6 * 3, n_channels_out=6 * 2, device=self.device),
-            hidden_dim=self.HIDDEN_DIM,
-            maintain_seed=False,
-            use_alive_mask=False,
-            state_dim=self.STATE_DIM,
-            residual=False,
-            distribution="normal",
-            neighborhood_size=nb_size,
-            device=self.device
-        )
-        nca_with_noise.random_updates = True
-        
+        # Initialize only Mixture and Stochastic models
         mix_nca = ExtendedMixtureNCA(
             update_nets=update_net_fn,
             hidden_dim=self.HIDDEN_DIM,
@@ -180,18 +157,28 @@ class NeighborhoodSizeAnalyzer:
             device=self.device
         )
         
-        # Load model weights (map to current device)
-        nca.load_state_dict(torch.load(exp_dir / 'standard_nca.pt', map_location=self.device, weights_only=True))
-        nca_with_noise.load_state_dict(torch.load(exp_dir / 'nca_with_noise.pt', map_location=self.device, weights_only=True))
-        mix_nca.load_state_dict(torch.load(exp_dir / 'mixture_nca.pt', map_location=self.device, weights_only=True))
-        stochastic_mix_nca.load_state_dict(torch.load(exp_dir / 'stochastic_mix_nca.pt', map_location=self.device, weights_only=True))
+        # Load model weights (try both _1000.pt and .pt suffixes)
+        def load_model_file(model, filename_base):
+            """Try loading with _1000.pt first, then .pt"""
+            file_1000 = exp_dir / f'{filename_base}_1000.pt'
+            file_regular = exp_dir / f'{filename_base}.pt'
+            
+            if file_1000.exists():
+                model.load_state_dict(torch.load(file_1000, map_location=self.device, weights_only=True))
+                print(f"    Loaded {filename_base}_1000.pt")
+            elif file_regular.exists():
+                model.load_state_dict(torch.load(file_regular, map_location=self.device, weights_only=True))
+                print(f"    Loaded {filename_base}.pt")
+            else:
+                raise FileNotFoundError(f"Model file not found: {filename_base}_1000.pt or {filename_base}.pt in {exp_dir}")
         
-        # Evaluate and get raw data
+        load_model_file(mix_nca, 'mixture_nca')
+        load_model_file(stochastic_mix_nca, 'stochastic_mix_nca')
+        
+        # Evaluate and get raw data (only Mixture and Stochastic)
         results_df, raw_data = self._evaluate_with_raw_data(
-            nca=nca.to(self.device),
             mix_nca=mix_nca.to(self.device),
             stochastic_mix_nca=stochastic_mix_nca.to(self.device),
-            nca_with_noise=nca_with_noise.to(self.device),
             nb_size=nb_size
         )
         
@@ -209,8 +196,8 @@ class NeighborhoodSizeAnalyzer:
         
         return results_df
     
-    def _evaluate_with_raw_data(self, nca, mix_nca, stochastic_mix_nca, nca_with_noise, nb_size: int):
-        """Evaluate models and return both summary and raw data"""
+    def _evaluate_with_raw_data(self, mix_nca, stochastic_mix_nca, nb_size: int):
+        """Evaluate models and return both summary and raw data (only Mixture and Stochastic)"""
         from mix_NCA.utils_simulations import grid_to_channels_batch
         from mix_NCA.BiologicalMetrics import BiologicalMetrics
         from mix_NCA.TissueModel import ComplexCellType
@@ -239,63 +226,26 @@ class NeighborhoodSizeAnalyzer:
             'Spatial Variance Diff': []
         }
         
-        # Evaluate for each step length
+        # Evaluate for each step length (only Mixture and Stochastic models)
         for n_steps in self.step_lengths:
             print(f"    Evaluating with {n_steps} steps...")
             
-            # Evaluate Standard NCA (deterministic, evaluate multiple times for consistency)
-            with torch.no_grad():
-                for eval_idx in range(self.n_evaluations):
-                    standard_samples = []
-                    for true_state in initial_states:
-                        result = nca(true_state, n_steps, return_history=True)
-                        if isinstance(result, tuple):
-                            sample = result[1][-1] if len(result[1]) > 0 else result[0]
-                        else:
-                            sample = result[-1]
-                        standard_samples.append(sample.argmax(dim=1))
-                    standard_gen = torch.stack(standard_samples).squeeze(1)
-                    
-                    bio_metrics = BiologicalMetrics(true_dataset, standard_gen, list(ComplexCellType), self.device)
-                    dist_metrics = bio_metrics.distribution_metrics()
-                    spatial_metrics = bio_metrics.spatial_correlation()
-                    
-                    raw_data['Model Type'].append('Standard NCA')
-                    raw_data['Neighborhood Size'].append(nb_size)
-                    raw_data['Step Length'].append(n_steps)
-                    raw_data['Evaluation'].append(eval_idx)
-                    raw_data['KL Divergence'].append(dist_metrics['kl_divergence'])
-                    raw_data['Chi-Square'].append(dist_metrics['chi_square'])
-                    raw_data['Categorical MMD'].append(dist_metrics['categorical_mmd'])
-                    raw_data['Tumor Size Diff'].append(bio_metrics.tumor_size_distribution())
-                    raw_data['Border Size Diff'].append(spatial_metrics['border_size_diff'])
-                    raw_data['Spatial Variance Diff'].append(spatial_metrics['spatial_variance_diff'])
-            
-            # Evaluate stochastic models
+            # Evaluate Mixture and Stochastic models
             for name, model in [
                 ('Mixture NCA', mix_nca),
-                ('Stochastic Mixture NCA', stochastic_mix_nca),
-                ('NCA with Noise', nca_with_noise)
+                ('Stochastic Mixture NCA', stochastic_mix_nca)
             ]:
                 for eval_idx in range(self.n_evaluations):
                     torch.manual_seed(eval_idx)
                     with torch.no_grad():
                         samples = []
                         for true_state in initial_states:
-                            if name == 'NCA with Noise':
-                                result = model(true_state, n_steps, return_history=True)
-                                if isinstance(result, tuple):
-                                    sample = result[1][-1] if len(result[1]) > 0 else result[0]
-                                else:
-                                    sample = result[-1]
-                                sample = sample.argmax(dim=1)
+                            result = model(true_state, n_steps, return_history=True, sample_non_differentiable=True)
+                            if isinstance(result, tuple):
+                                sample = result[1][-1] if len(result[1]) > 0 else result[0]
                             else:
-                                result = model(true_state, n_steps, return_history=True, sample_non_differentiable=True)
-                                if isinstance(result, tuple):
-                                    sample = result[1][-1] if len(result[1]) > 0 else result[0]
-                                else:
-                                    sample = result[-1]
-                                sample = sample.argmax(dim=1)
+                                sample = result[-1]
+                            sample = sample.argmax(dim=1)
                             samples.append(sample)
                         generated = torch.stack(samples).squeeze(1)
                     
@@ -506,15 +456,13 @@ class NeighborhoodSizeAnalyzer:
         return pd.DataFrame(trend_results)
     
     def computational_complexity_analysis(self, n_samples: int = 5, 
-                                         model_type: str = "standard") -> pd.DataFrame:
+                                         model_type: str = "mixture") -> pd.DataFrame:
         """
         Measure computational time for different neighborhood sizes
         
         Args:
             n_samples: Number of samples to average over
             model_type: Type of model to analyze. Options:
-                - "standard": Standard NCA
-                - "nca_with_noise": NCA with Noise
                 - "mixture": Mixture NCA
                 - "stochastic": Stochastic Mixture NCA
         """
@@ -522,36 +470,10 @@ class NeighborhoodSizeAnalyzer:
         print(f"Computational Complexity Analysis - {model_type.upper()}")
         print(f"{'='*60}\n")
         
-        # Map model type to file name and model class
+        # Map model type to file name and model class (only Mixture and Stochastic)
         model_configs = {
-            "standard": {
-                "file": "standard_nca.pt",
-                "model_class": ExtendedNCA,
-                "init_kwargs": {
-                    "update_net": classification_update_net(6 * 3, n_channels_out=6, device=self.device),
-                    "hidden_dim": self.HIDDEN_DIM,
-                    "maintain_seed": False,
-                    "use_alive_mask": False,
-                    "state_dim": self.STATE_DIM,
-                    "residual": False
-                }
-            },
-            "nca_with_noise": {
-                "file": "nca_with_noise.pt",
-                "model_class": ExtendedNCA,
-                "init_kwargs": {
-                    "update_net": classification_update_net(6 * 3, n_channels_out=6 * 2, device=self.device),
-                    "hidden_dim": self.HIDDEN_DIM,
-                    "maintain_seed": False,
-                    "use_alive_mask": False,
-                    "state_dim": self.STATE_DIM,
-                    "residual": False,
-                    "distribution": "normal"
-                },
-                "post_init": lambda model: setattr(model, 'random_updates', True)
-            },
             "mixture": {
-                "file": "mixture_nca.pt",
+                "file": "mixture_nca_1000.pt",
                 "model_class": ExtendedMixtureNCA,
                 "init_kwargs": {
                     "update_nets": lambda n_channels, hidden_dims=128, n_channels_out=None, device_arg=None: 
@@ -566,7 +488,7 @@ class NeighborhoodSizeAnalyzer:
                 }
             },
             "stochastic": {
-                "file": "stochastic_mix_nca.pt",
+                "file": "stochastic_mix_nca_1000.pt",
                 "model_class": ExtendedMixtureNCANoise,
                 "init_kwargs": {
                     "update_nets": lambda n_channels, hidden_dims=128, n_channels_out=None, device_arg=None: 
@@ -607,9 +529,16 @@ class NeighborhoodSizeAnalyzer:
             if not exp_dir.exists():
                 continue
             
-            model_file = exp_dir / config["file"]
-            if not model_file.exists():
-                print(f"  Skipping NB_{nb_size}: {config['file']} not found")
+            # Try both _1000.pt and .pt suffixes
+            model_file_1000 = exp_dir / config["file"]
+            model_file_regular = exp_dir / config["file"].replace("_1000.pt", ".pt")
+            
+            if model_file_1000.exists():
+                model_file = model_file_1000
+            elif model_file_regular.exists():
+                model_file = model_file_regular
+            else:
+                print(f"  Skipping NB_{nb_size}: {config['file']} or {config['file'].replace('_1000.pt', '.pt')} not found")
                 continue
             
             print(f"Testing NB_{nb_size} ({model_type})...")
@@ -696,7 +625,7 @@ class NeighborhoodSizeAnalyzer:
         return pd.DataFrame(complexity_results)
     
     def create_visualizations(self, output_dir: Optional[str] = None):
-        """Create comprehensive visualizations using Plotly"""
+        """Create comprehensive visualizations using Plotly (only for Mixture NCA and Stochastic Mixture NCA)"""
         if output_dir is None:
             output_dir = self.base_dir / "analysis_plots"
         else:
@@ -709,6 +638,10 @@ class NeighborhoodSizeAnalyzer:
         print(f"{'='*60}\n")
         
         df = self.parse_metrics()
+        
+        # Filter to show only Mixture NCA and Stochastic Mixture NCA
+        target_models = ['Mixture NCA', 'Stochastic Mixture NCA']
+        df = df[df['Model Type'].isin(target_models)]
         
         metric_cols = ['KL Divergence', 'Chi-Square', 'Categorical MMD', 
                       'Tumor Size Diff', 'Border Size Diff', 'Spatial Variance Diff']
