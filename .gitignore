@@ -186,6 +186,7 @@ notebooks/*.pt
 notebooks/*.mp4
 notebooks/*.pth
 *.npy
+!histories_1000.npy
 notebooks/immune_simulation_MNCA.ipynb
 notebooks/test_variability.ipynb
 notebooks/videos_of_nca.ipynb
