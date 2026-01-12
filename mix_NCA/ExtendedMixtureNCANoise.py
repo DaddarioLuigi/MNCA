@@ -41,7 +41,7 @@ class ExtendedMixtureNCANoise(MixtureNCANoise):
 
         # Store neighborhood size and override perception filters if needed
         self.neighborhood_size = neighborhood_size
-        if neighborhood_size > 3:
+        if neighborhood_size != 3:
             self._setup_extended_perception_filters(device)
 
         # Re-bind perceive after (re)creating kernels
@@ -57,11 +57,24 @@ class ExtendedMixtureNCANoise(MixtureNCANoise):
 
         # Identity filter (center pixel)
         identity = torch.zeros(kernel_size, kernel_size, dtype=torch.float32).to(device)
-        identity[padding, padding] = 1.0
+        if kernel_size == 1:
+            identity[0, 0] = 1.0
+        else:
+            identity[padding, padding] = 1.0
 
         if self.filter_type == "sobel":
             # Extended Sobel filters
-            if kernel_size == 3:
+            if kernel_size == 1:
+                # 1x1: No gradient detection possible, use zeros (identity only matters)
+                sobel_x = torch.tensor([[0]], dtype=torch.float32).to(device)
+                sobel_y = torch.tensor([[0]], dtype=torch.float32).to(device)
+            elif kernel_size == 2:
+                # 2x2 Sobel approximation
+                sobel_x = torch.tensor([[-1, 1],
+                                      [-1, 1]], dtype=torch.float32).to(device)
+                sobel_y = torch.tensor([[-1, -1],
+                                      [1, 1]], dtype=torch.float32).to(device)
+            elif kernel_size == 3:
                 sobel_x = torch.tensor([[-1, 0, 1],
                                        [-2, 0, 2],
                                        [-1, 0, 1]], dtype=torch.float32).to(device)
@@ -127,7 +140,14 @@ class ExtendedMixtureNCANoise(MixtureNCANoise):
                 sobel_y.unsqueeze(0).unsqueeze(0).repeat(self.state_dim, 1, 1, 1))
 
         else:  # laplacian
-            if kernel_size == 3:
+            if kernel_size == 1:
+                # 1x1: No Laplacian possible, use zero
+                laplacian = torch.tensor([[0]], dtype=torch.float32).to(device)
+            elif kernel_size == 2:
+                # 2x2 Laplacian approximation
+                laplacian = torch.tensor([[1, 1],
+                                        [1, -3]], dtype=torch.float32).to(device)
+            elif kernel_size == 3:
                 laplacian = torch.tensor([[1, 1, 1],
                                           [1, -8, 1],
                                           [1, 1, 1]], dtype=torch.float32).to(device)

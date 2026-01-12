@@ -46,8 +46,8 @@ class ExtendedNCA(NCA):
         # Add neighborhood size parameter
         self.neighborhood_size = neighborhood_size
         
-        # Override perception filters if neighborhood size > 3
-        if neighborhood_size > 3:
+        # Override perception filters if neighborhood size != 3
+        if neighborhood_size != 3:
             self._setup_extended_perception_filters(device)
         
         # Re-set perception function after filter setup
@@ -63,14 +63,27 @@ class ExtendedNCA(NCA):
         
         # Identity filter (center pixel)
         identity = torch.zeros(kernel_size, kernel_size, dtype=torch.float32).to(device)
-        identity[padding, padding] = 1.0
+        if kernel_size == 1:
+            identity[0, 0] = 1.0
+        else:
+            identity[padding, padding] = 1.0
         
         if self.filter_type == "sobel":
             # Extended Sobel filters
             sobel_x = torch.zeros(kernel_size, kernel_size, dtype=torch.float32).to(device)
             sobel_y = torch.zeros(kernel_size, kernel_size, dtype=torch.float32).to(device)
             
-            if kernel_size == 3:
+            if kernel_size == 1:
+                # 1x1: No gradient detection possible, use zeros (identity only matters)
+                sobel_x = torch.tensor([[0]], dtype=torch.float32).to(device)
+                sobel_y = torch.tensor([[0]], dtype=torch.float32).to(device)
+            elif kernel_size == 2:
+                # 2x2 Sobel approximation
+                sobel_x = torch.tensor([[-1, 1],
+                                      [-1, 1]], dtype=torch.float32).to(device)
+                sobel_y = torch.tensor([[-1, -1],
+                                      [1, 1]], dtype=torch.float32).to(device)
+            elif kernel_size == 3:
                 # Standard 3x3 Sobel
                 sobel_x = torch.tensor([[-1, 0, 1],
                                       [-2, 0, 2],
@@ -140,7 +153,14 @@ class ExtendedNCA(NCA):
             # Extended Laplacian filters
             laplacian = torch.zeros(kernel_size, kernel_size, dtype=torch.float32).to(device)
             
-            if kernel_size == 3:
+            if kernel_size == 1:
+                # 1x1: No Laplacian possible, use zero
+                laplacian = torch.tensor([[0]], dtype=torch.float32).to(device)
+            elif kernel_size == 2:
+                # 2x2 Laplacian approximation
+                laplacian = torch.tensor([[1, 1],
+                                        [1, -3]], dtype=torch.float32).to(device)
+            elif kernel_size == 3:
                 # Standard 3x3 Laplacian
                 laplacian = torch.tensor([[1, 1, 1],
                                         [1, -8, 1],
