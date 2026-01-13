@@ -197,17 +197,27 @@ class NeighborhoodSizeAnalyzer:
         return results_df
     
     def _evaluate_with_raw_data(self, mix_nca, stochastic_mix_nca, nb_size: int):
-        """Evaluate models and return both summary and raw data (only Mixture and Stochastic)"""
+        """Evaluate models and return both summary and raw data (only Mixture and Stochastic)
+        
+        OPTIMIZATION: Processes all histories in a single batch instead of one-by-one,
+        which is orders of magnitude faster (reduces from O(N*M) to O(1) forward passes).
+        """
         from mix_NCA.utils_simulations import grid_to_channels_batch
         from mix_NCA.BiologicalMetrics import BiologicalMetrics
         from mix_NCA.TissueModel import ComplexCellType
+        from tqdm import tqdm
         
-        # Collect all true states
-        initial_states = []
+        # Collect all true states and stack them into a batch
+        # OPTIMIZATION: Process all histories in batch instead of individually
+        initial_states_list = []
         for hist in self.histories:
             grid_state = hist[0]
             encoded_state = grid_to_channels_batch(grid_state, len(ComplexCellType), self.device)
-            initial_states.append(encoded_state)
+            initial_states_list.append(encoded_state)
+        
+        # Stack all initial states into a single batch [N, C, H, W]
+        # This allows processing all 1000 histories in one forward pass instead of 1000 separate passes
+        initial_states_batch = torch.cat(initial_states_list, dim=0)
         
         # Stack all true states
         true_dataset = torch.cat([torch.tensor(ts[-1]).to(self.device).unsqueeze(0) for ts in self.histories], dim=0)
@@ -226,10 +236,14 @@ class NeighborhoodSizeAnalyzer:
             'Spatial Variance Diff': []
         }
         
+        # Calculate total iterations for progress bar
+        total_iterations = len(self.step_lengths) * 2 * self.n_evaluations
+        print(f"    Processing {len(self.histories)} histories in batch mode (much faster than individual processing)")
+        print(f"    Total evaluations: {total_iterations} (across {len(self.step_lengths)} step lengths, 2 models, {self.n_evaluations} evaluations each)")
+        pbar = tqdm(total=total_iterations, desc=f"Evaluating NB={nb_size}", unit="eval")
+        
         # Evaluate for each step length (only Mixture and Stochastic models)
         for n_steps in self.step_lengths:
-            print(f"    Evaluating with {n_steps} steps...")
-            
             # Evaluate Mixture and Stochastic models
             for name, model in [
                 ('Mixture NCA', mix_nca),
@@ -238,16 +252,16 @@ class NeighborhoodSizeAnalyzer:
                 for eval_idx in range(self.n_evaluations):
                     torch.manual_seed(eval_idx)
                     with torch.no_grad():
-                        samples = []
-                        for true_state in initial_states:
-                            result = model(true_state, n_steps, return_history=True, sample_non_differentiable=True)
-                            if isinstance(result, tuple):
-                                sample = result[1][-1] if len(result[1]) > 0 else result[0]
-                            else:
-                                sample = result[-1]
-                            sample = sample.argmax(dim=1)
-                            samples.append(sample)
-                        generated = torch.stack(samples).squeeze(1)
+                        # Process all histories in a single batch instead of one by one
+                        # This is MUCH faster than processing them individually
+                        result = model(initial_states_batch, n_steps, return_history=True, sample_non_differentiable=True)
+                        if isinstance(result, tuple):
+                            sample = result[1][-1] if len(result[1]) > 0 else result[0]
+                        else:
+                            sample = result[-1]
+                        # sample shape: [N, C, H, W] -> [N, H, W] after argmax
+                        sample = sample.argmax(dim=1)
+                        generated = sample  # Already in correct shape [N, H, W]
                     
                     bio_metrics = BiologicalMetrics(true_dataset, generated, list(ComplexCellType), self.device)
                     dist_metrics = bio_metrics.distribution_metrics()
@@ -263,6 +277,10 @@ class NeighborhoodSizeAnalyzer:
                     raw_data['Tumor Size Diff'].append(bio_metrics.tumor_size_distribution())
                     raw_data['Border Size Diff'].append(spatial_metrics['border_size_diff'])
                     raw_data['Spatial Variance Diff'].append(spatial_metrics['spatial_variance_diff'])
+                    
+                    pbar.update(1)
+        
+        pbar.close()
         
         # Create summary DataFrame (for compatibility)
         raw_df = pd.DataFrame(raw_data)
