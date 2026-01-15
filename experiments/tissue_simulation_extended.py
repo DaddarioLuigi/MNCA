@@ -266,18 +266,20 @@ def run_experiment(histories_path, output_dir, neighborhood_sizes,
             nca.load_state_dict(torch.load(std_path, weights_only=True))
         else:
             print(f"\nTraining Standard NCA (nb={nb_size})...")
-            train_nca_dyn(
+            std_losses = train_nca_dyn(
                 nca, histories,
                 n_cell_types=n_cell_types,
                 n_epochs=n_epochs,
                 time_length=time_length,
                 update_every=update_every,
                 device=device,
-                lr=LEARNING_RATE
+                lr=LEARNING_RATE,
+                return_losses=True
             )
             # Save Standard NCA
             torch.save(nca.state_dict(), std_path)
             print(f"Saved Standard NCA to {std_path}")
+            np.save(os.path.join(exp_dir, 'standard_nca_loss_curve.npy'), np.asarray(std_losses))
         
         # Train NCA with Noise
         gca_path = os.path.join(exp_dir, 'nca_with_noise.pt')
@@ -286,18 +288,20 @@ def run_experiment(histories_path, output_dir, neighborhood_sizes,
             nca_with_noise.load_state_dict(torch.load(gca_path, weights_only=True))
         else:
             print(f"\nTraining NCA with Noise (nb={nb_size})...")
-            train_nca_dyn(
+            gca_losses = train_nca_dyn(
                 nca_with_noise, histories,
                 n_cell_types=n_cell_types,
                 n_epochs=n_epochs,
                 time_length=time_length,
                 update_every=update_every,
                 device=device,
-                lr=LEARNING_RATE / 10  # Lower LR for noise model as in notebook
+                lr=LEARNING_RATE / 10,  # Lower LR for noise model as in notebook
+                return_losses=True
             )
             # Save NCA with Noise
             torch.save(nca_with_noise.state_dict(), gca_path)
             print(f"Saved NCA with Noise to {gca_path}")
+            np.save(os.path.join(exp_dir, 'nca_with_noise_loss_curve.npy'), np.asarray(gca_losses))
         
         # Train Mixture NCA
         mix_path = os.path.join(exp_dir, 'mixture_nca.pt')
@@ -306,7 +310,7 @@ def run_experiment(histories_path, output_dir, neighborhood_sizes,
             mix_nca.load_state_dict(torch.load(mix_path, weights_only=True))
         else:
             print(f"\nTraining Mixture NCA (nb={nb_size})...")
-            train_nca_dyn(
+            mix_losses = train_nca_dyn(
                 model=mix_nca,
                 target_states=histories,
                 n_cell_types=n_cell_types,
@@ -319,11 +323,13 @@ def run_experiment(histories_path, output_dir, neighborhood_sizes,
                 min_temperature=MIN_TEMPERATURE,
                 anneal_rate=ANNEAL_RATE,
                 loss_type=LOSS_TYPE,
-                straight_through=False
+                straight_through=False,
+                return_losses=True
             )
             # Save Mixture NCA
             torch.save(mix_nca.state_dict(), mix_path)
             print(f"Saved Mixture NCA to {mix_path}")
+            np.save(os.path.join(exp_dir, 'mixture_nca_loss_curve.npy'), np.asarray(mix_losses))
         
         # Train Stochastic Mixture NCA
         stoch_path = os.path.join(exp_dir, 'stochastic_mix_nca.pt')
@@ -332,7 +338,7 @@ def run_experiment(histories_path, output_dir, neighborhood_sizes,
             stochastic_mix_nca.load_state_dict(torch.load(stoch_path, weights_only=True))
         else:
             print(f"\nTraining Stochastic Mixture NCA (nb={nb_size})...")
-            train_nca_dyn(
+            stoch_losses = train_nca_dyn(
                 model=stochastic_mix_nca,
                 target_states=histories,
                 n_cell_types=n_cell_types,
@@ -345,11 +351,13 @@ def run_experiment(histories_path, output_dir, neighborhood_sizes,
                 gamma=GAMMA,
                 temperature=TEMPERATURE,
                 min_temperature=MIN_TEMPERATURE,
-                anneal_rate=ANNEAL_RATE
+                anneal_rate=ANNEAL_RATE,
+                return_losses=True
             )
             # Save Stochastic Mixture NCA
             torch.save(stochastic_mix_nca.state_dict(), stoch_path)
             print(f"Saved Stochastic Mixture NCA to {stoch_path}")
+            np.save(os.path.join(exp_dir, 'stochastic_mix_nca_loss_curve.npy'), np.asarray(stoch_losses))
         
         # Evaluation: Compare generated distributions for each step length
         print(f"\nEvaluating models (nb={nb_size})...")

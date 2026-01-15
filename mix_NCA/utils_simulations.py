@@ -55,9 +55,10 @@ def grid_to_channels_batch(grids, n_cell_types, device="cpu"):
     
     return channels
 
-def train_nca_dyn(model, target_states, n_cell_types=5, time_length=10, n_epochs=300, 
+def train_nca_dyn(model, target_states, n_cell_types=5, time_length=10, n_epochs=300,
                   device="cuda", update_every=2, lr=0.001, milestones=[500], gamma=0.1,
-                  loss_type="mse", temperature=None, min_temperature=0.1, anneal_rate=0.005, class_assignment = None, straight_through = False):
+                  loss_type="mse", temperature=None, min_temperature=0.1, anneal_rate=0.005,
+                  class_assignment=None, straight_through=False, return_losses=False):
     """Train NCA on dynamic sequences with random time spans
     
     Args:
@@ -102,18 +103,21 @@ def train_nca_dyn(model, target_states, n_cell_types=5, time_length=10, n_epochs
 
     # Create outer progress bar for epochs
     pbar = tqdm(range(n_epochs), desc=f'Training NCA ({loss_type})')
+    losses = []
     
     for _ in pbar:    
-        total_loss = 0
+        total_loss = 0.0
 
         
         # Sample random start point that allows for time_length window
         max_start = total_sequence_length - time_length
         start_idx = np.random.randint(0, max_start) if max_start > 0 else 0
         end_idx = start_idx + time_length
+        n_loss_terms = 0
         
         # Track gradients for the sampled sequence
         for step in range(start_idx, end_idx - update_every, update_every):
+            n_loss_terms += 1
             # Get current state from precomputed tensors
             current_state = precomputed_states[step] 
             # Forward pass
@@ -156,14 +160,16 @@ def train_nca_dyn(model, target_states, n_cell_types=5, time_length=10, n_epochs
                 temperature = max(min_temperature, temperature - anneal_rate * n_epochs)
 
         scheduler.step()
+        epoch_loss = total_loss / max(1, n_loss_terms)
+        losses.append(epoch_loss)
         
         # Update progress bar description with current loss
         pbar.set_postfix({
-            'loss': f'{total_loss/time_length:.6f}',
+            'loss': f'{epoch_loss:.6f}',
             'window': f'{start_idx}-{end_idx}'
         })
     
-    return total_loss
+    return losses if return_losses else total_loss
 
 
 def plot_nca_prediction(nca, initial_state, cell_type_enum, n_cell_types=5, steps=30, 
