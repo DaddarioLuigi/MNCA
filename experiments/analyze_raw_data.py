@@ -10,7 +10,7 @@ from itertools import combinations
 
 # Path ai risultati
 BASE_DIR = Path(__file__).parent / "results_extended" / "tissue_simulation_extended"
-NEIGHBORHOOD_SIZES = [3, 4, 5, 6, 7]
+NEIGHBORHOOD_SIZES = [1,2,3, 4, 5, 6, 7]
 
 print("="*80)
 print("ANALISI DATI GREZZI - STATISTICAL TESTS")
@@ -75,13 +75,13 @@ for model_type in raw_df['Model Type'].unique():
                 print(f"    Valori: {group_data}")
         
         if len(groups) < 2:
-            print("  ⚠️  Meno di 2 gruppi disponibili, salto il test")
+            print("   Meno di 2 gruppi disponibili, salto il test")
             continue
         
         # Verifica varianza zero
         zero_var_groups = [nb for nb, data in groups.items() if np.var(data) == 0]
         if zero_var_groups:
-            print(f"  ⚠️  VARIANZA ZERO per: {zero_var_groups}")
+            print(f"VARIANZA ZERO per: {zero_var_groups}")
             print(f"      Questi gruppi hanno tutti lo stesso valore!")
         
         # Verifica separazione completa
@@ -93,7 +93,7 @@ for model_type in raw_df['Model Type'].unique():
             h_stat, p_value_kw = kruskal(*group_list)
             print(f"  Kruskal-Wallis: H={h_stat:.4f}, p={p_value_kw:.6f}")
         except Exception as e:
-            print(f"  ⚠️  Kruskal-Wallis fallito: {e}")
+            print(f"    Kruskal-Wallis fallito: {e}")
             continue
         
         # Mann-Whitney U per ogni coppia
@@ -127,7 +127,7 @@ for model_type in raw_df['Model Type'].unique():
                 print(f"    NB{nb_i} vs NB{nb_j}: U={u_stat:.2f}, p={p_value_mw:.6f}{separation}{u_warning}")
                 
             except Exception as e:
-                print(f"    ⚠️  NB{nb_i} vs NB{nb_j}: {e}")
+                print(f"      NB{nb_i} vs NB{nb_j}: {e}")
 
 print(f"\n{'='*80}")
 print("ANALISI COMPLETATA")
