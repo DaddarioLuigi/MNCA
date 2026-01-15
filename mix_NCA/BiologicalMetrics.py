@@ -215,8 +215,20 @@ class BiologicalMetrics:
             'spatial_variance_diff': spatial_var_dist_norm
         }
 
-def compare_generated_distributions(histories, standard_nca, mixture_nca, stochastic_nca, nca_with_noise,
-                                 n_steps=35, n_evaluations=10, device="cuda", deterministic_rule_choice = False):
+def compare_generated_distributions(
+    histories,
+    standard_nca,
+    mixture_nca,
+    stochastic_nca,
+    nca_with_noise,
+    n_steps=25,
+    n_evaluations=10,
+    device="cuda",
+    deterministic_rule_choice=False,
+    sample_non_differentiable=True,
+    straight_through=True,
+    temperature=None,
+):
     """
     Compare generated distributions against the true dataset with multiple evaluations
     
@@ -320,8 +332,16 @@ def compare_generated_distributions(histories, standard_nca, mixture_nca, stocha
                                 else:
                                     sample = result[-1]
                             sample = sample.argmax(dim=1)
-                        else: 
-                            result = model(true_state, n_steps, return_history=True, sample_non_differentiable = True)
+                        else:
+                            kwargs = {
+                                "return_history": True,
+                                "sample_non_differentiable": sample_non_differentiable,
+                                "straight_through": straight_through,
+                            }
+                            if temperature is not None:
+                                kwargs["temperature"] = temperature
+
+                            result = model(true_state, n_steps, **kwargs)
                             # ExtendedNCA returns (x, frames) tuple, NCA returns stacked frames
                             if isinstance(result, tuple):
                                 sample = result[1][-1] if len(result[1]) > 0 else result[0]

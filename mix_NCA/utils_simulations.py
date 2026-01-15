@@ -58,7 +58,8 @@ def grid_to_channels_batch(grids, n_cell_types, device="cpu"):
 def train_nca_dyn(model, target_states, n_cell_types=5, time_length=10, n_epochs=300,
                   device="cuda", update_every=2, lr=0.001, milestones=[500], gamma=0.1,
                   loss_type="mse", temperature=None, min_temperature=0.1, anneal_rate=0.005,
-                  class_assignment=None, straight_through=False, return_losses=False):
+                  class_assignment=None, straight_through=False, return_losses=False,
+                  anneal_temperature=True):
     """Train NCA on dynamic sequences with random time spans
     
     Args:
@@ -105,7 +106,12 @@ def train_nca_dyn(model, target_states, n_cell_types=5, time_length=10, n_epochs
     pbar = tqdm(range(n_epochs), desc=f'Training NCA ({loss_type})')
     losses = []
     
-    for _ in pbar:    
+    # Interpret anneal_rate as a *per-optimizer-step* decrement (not multiplied by n_epochs).
+    # Set anneal_temperature=False or anneal_rate<=0 to keep temperature fixed.
+    if temperature is not None:
+        temperature = float(temperature)
+
+    for _ in pbar:
         total_loss = 0.0
 
         
@@ -156,8 +162,8 @@ def train_nca_dyn(model, target_states, n_cell_types=5, time_length=10, n_epochs
             total_loss += single_loss.item()
 
 
-            if temperature is not None:
-                temperature = max(min_temperature, temperature - anneal_rate * n_epochs)
+            if temperature is not None and anneal_temperature and anneal_rate and anneal_rate > 0:
+                temperature = max(min_temperature, temperature - anneal_rate)
 
         scheduler.step()
         epoch_loss = total_loss / max(1, n_loss_terms)
@@ -386,9 +392,10 @@ def plot_nca_prediction2(nca, initial_state, steps=30, plot_every=5, device="cud
     #plt.tight_layout()
     return plt
 
-def plot_automata_comparison_grid(det_nca=None, gca=None, mix_nca=None, stoch_mix_nca=None, 
-                                initial_state=None, models_dict=None, n_examples=3, n_steps=35, 
-                                figsize=(10, 18), cell_type_enum=ComplexCellType, device = "cuda"):
+def plot_automata_comparison_grid(det_nca=None, gca=None, mix_nca=None, stoch_mix_nca=None,
+                                initial_state=None, models_dict=None, n_examples=3, n_steps=25,
+                                figsize=(10, 18), cell_type_enum=ComplexCellType, device="cuda",
+                                sample_non_differentiable=None, straight_through=True, temperature=None):
     """
     Plot a grid comparing original tissue with predictions from different NCA models and a GCA baseline.
     
@@ -457,7 +464,7 @@ def plot_automata_comparison_grid(det_nca=None, gca=None, mix_nca=None, stoch_mi
     if len(models_dict) == 0:
         raise ValueError("At least one model must be provided (via models_dict or individual parameters)")
     
-    # Determine which models use stochastic sampling
+    # Determine which models use stochastic sampling (legacy default behavior only).
     # Models with 'stoch' or 'stochastic' in the name, or passed as stoch_mix_nca
     stochastic_models = set()
     for name in models_dict.keys():
@@ -518,11 +525,27 @@ def plot_automata_comparison_grid(det_nca=None, gca=None, mix_nca=None, stoch_mi
                     torch.manual_seed(col)
                     current_state = grid_to_channels_batch([initial_state[col][0]], n_cell_types = len(cell_type_enum), device = device)
                     for _ in range(n_steps):
-                        # Check if this model uses stochastic sampling
-                        if model_name in stochastic_models:
-                            current_state = model(current_state, 1, return_history=False, sample_non_differentiable = True)
-                        else:
-                            current_state = model(current_state, 1, return_history=False)
+                        # Unify rule sampling across models when requested.
+                        # - sample_non_differentiable=None: legacy behavior (stochastic models hard-sampled, others default).
+                        # - sample_non_differentiable=True/False: force same mode for all mixture models.
+                        kwargs = {"return_history": False}
+                        forced_sample = sample_non_differentiable
+                        if forced_sample is None:
+                            forced_sample = (model_name in stochastic_models)
+
+                        # Only Mixture* models accept these kwargs; for others we fall back gracefully.
+                        kwargs_mixture = {
+                            **kwargs,
+                            "sample_non_differentiable": forced_sample,
+                            "straight_through": straight_through,
+                        }
+                        if temperature is not None:
+                            kwargs_mixture["temperature"] = temperature
+
+                        try:
+                            current_state = model(current_state, 1, **kwargs_mixture)
+                        except TypeError:
+                            current_state = model(current_state, 1, **kwargs)
                     ax.imshow(
                         torch.argmax(current_state.squeeze(), dim=0).cpu(),
                         cmap=custom_cmap,

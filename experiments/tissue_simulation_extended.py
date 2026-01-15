@@ -248,7 +248,7 @@ def get_device(device_preference="auto"):
 def run_experiment(histories_path, output_dir, neighborhood_sizes,
                    n_epochs=800, time_length=500, update_every=1,
                    n_cell_types=6, device="auto", n_evaluations=10,
-                   step_lengths=[35, 100, 500], generate_videos=False,
+                   step_lengths=[25, 100, 500], generate_videos=False,
                    curriculum=False, curriculum_schedule=None):
     """
     Train and evaluate NCA models with different neighborhood sizes on biological simulations
@@ -489,6 +489,7 @@ def run_experiment(histories_path, output_dir, neighborhood_sizes,
                     temperature=TEMPERATURE,
                     min_temperature=MIN_TEMPERATURE,
                     anneal_rate=ANNEAL_RATE,
+                    anneal_temperature=False,
                     loss_type=LOSS_TYPE,
                     straight_through=False,
                     return_losses=True
@@ -539,6 +540,7 @@ def run_experiment(histories_path, output_dir, neighborhood_sizes,
                     temperature=TEMPERATURE,
                     min_temperature=MIN_TEMPERATURE,
                     anneal_rate=ANNEAL_RATE,
+                    anneal_temperature=False,
                     return_losses=True
                 )
                 torch.save(stochastic_mix_nca.state_dict(), stoch_path)
@@ -563,7 +565,11 @@ def run_experiment(histories_path, output_dir, neighborhood_sizes,
                 n_steps=n_steps,
                 n_evaluations=n_evaluations,
                 device=device,
-                deterministic_rule_choice=False
+                deterministic_rule_choice=False,
+                # Keep evaluation rule sampling consistent across mixture models
+                sample_non_differentiable=False,
+                straight_through=True,
+                temperature=None
             )
             
             # Add neighborhood size and step length columns
@@ -667,8 +673,8 @@ if __name__ == "__main__":
                         help='Computing device (auto, cuda, mps, or cpu). "auto" will select the best available device.')
     parser.add_argument('--n_evaluations', type=int, default=10,
                         help='Number of evaluations for stochastic models')
-    parser.add_argument('--step_lengths', type=str, default='35,100,500',
-                        help='Comma-separated list of step lengths to test (default: 35,100,500)')
+    parser.add_argument('--step_lengths', type=str, default='25,100,500',
+                        help='Comma-separated list of step lengths to test (default: 25,100,500)')
     parser.add_argument('--generate_videos', action='store_true',
                         help='Generate videos of model evolution')
     args = parser.parse_args()
