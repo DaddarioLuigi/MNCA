@@ -45,24 +45,42 @@ class NeighborhoodSizeAnalyzer:
     def __init__(self, results_dir: str, histories_path: str, 
                  device: str = "auto", n_evaluations: int = 10,
                  step_lengths: List[int] = [35, 100, 500],
-                 model_files: Optional[Dict[str, List[str]]] = None):
+                 model_files: Optional[Dict[str, List[str]]] = None,
+                 experiment_subdir: Optional[str] = "tissue_simulation_extended"):
         """
         Initialize analyzer
         
         Args:
-            results_dir: Directory containing trained models (e.g., 'results_extended')
+            results_dir: Base results directory. By default, the analyzer will look inside
+                results_dir/experiment_subdir. If you already pass the experiment folder itself
+                (e.g., .../tissue_simulation_extended), it will be used directly.
             histories_path: Path to histories.npy file
             device: Computing device
             n_evaluations: Number of evaluations for stochastic models
             model_files: Optional mapping from model label -> list of checkpoint filenames to try
                 inside each NB_k folder. If omitted, defaults to the standard checkpoint names.
+            experiment_subdir: Subfolder under results_dir that contains NB_* folders.
+                - Default: "tissue_simulation_extended" (backwards compatible)
+                - Set to None to treat results_dir as the experiment folder directly.
         """
         self.results_dir = Path(results_dir)
         self.histories_path = histories_path
         self.device = get_device(device)
         self.n_evaluations = n_evaluations
         self.step_lengths = step_lengths if isinstance(step_lengths, list) else [step_lengths]
-        self.base_dir = self.results_dir / "tissue_simulation_extended"
+
+        # Resolve experiment directory:
+        # - If experiment_subdir is None: treat results_dir as already pointing at the experiment folder
+        # - Else: use results_dir/experiment_subdir, but avoid double-appending if results_dir already
+        #   points to that folder.
+        if experiment_subdir is None:
+            self.base_dir = self.results_dir
+        else:
+            exp_subdir = str(experiment_subdir)
+            if self.results_dir.name == exp_subdir:
+                self.base_dir = self.results_dir
+            else:
+                self.base_dir = self.results_dir / exp_subdir
         
         # Hyperparameters (should match training)
         self.HIDDEN_DIM = 128
