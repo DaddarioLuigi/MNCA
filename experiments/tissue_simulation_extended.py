@@ -161,26 +161,91 @@ def _generate_videos_for_models(models, histories, n_steps, nb_size, output_dir,
             with torch.no_grad():
                 result = model(initial_state, n_steps, return_history=True)
                 
-                if isinstance(result, tuple):
-                    frames = result[1] if len(result[1]) > 0 else [result[0]]
+                # Extract "history" if returned, otherwise treat result as a single frame
+                history = result[1] if isinstance(result, tuple) and len(result) > 1 else result
+
+            n_cell_types = len(ComplexCellType)
+
+            def _as_numpy_label_grid(frame_like):
+                """
+                Convert a frame-like object to a 2D numpy array of integer cell labels.
+                Accepts torch tensors or numpy arrays in shapes:
+                  - (C,H,W)
+                  - (B,C,H,W) (uses first batch)
+                  - (H,W) (already labels)
+                """
+                if isinstance(frame_like, np.ndarray):
+                    arr = frame_like
+                    if arr.ndim == 2:
+                        return arr
+                    t = torch.from_numpy(arr)
+                elif isinstance(frame_like, torch.Tensor):
+                    t = frame_like
                 else:
-                    frames = result if isinstance(result, list) else [result]
-            
+                    return None
+
+                # Move to CPU for indexing and ensure tensor
+                if isinstance(t, torch.Tensor):
+                    t = t.detach().cpu()
+
+                if t.ndim == 4:
+                    # (B,C,H,W) or (T,C,H,W) - caller should have flattened time already.
+                    # Prefer interpreting as batch and taking the first element.
+                    t = t[0]
+                if t.ndim == 3:
+                    # (C,H,W): slice to biological channels then argmax over channel dimension
+                    t = t[:n_cell_types].argmax(dim=0)
+                if t.ndim == 2:
+                    return t.numpy()
+                return None
+
+            def _flatten_to_frame_list(history_like):
+                """
+                Flatten history to a list of frame-likes, handling common layouts:
+                  - list/tuple of frames
+                  - torch.Tensor of shape (T,B,C,H,W) or (T,C,H,W) or (B,C,H,W)
+                  - numpy arrays with the same conventions
+                """
+                if history_like is None:
+                    return []
+
+                if isinstance(history_like, (list, tuple)):
+                    out = []
+                    for item in history_like:
+                        out.extend(_flatten_to_frame_list(item))
+                    return out
+
+                if isinstance(history_like, np.ndarray):
+                    arr = history_like
+                    # Treat (T,...) as time-major if first dim > 1 and array has >= 4 dims or looks like (T,C,H,W)
+                    if arr.ndim >= 4 and arr.shape[0] > 1:
+                        return [arr[i] for i in range(arr.shape[0])]
+                    return [arr]
+
+                if isinstance(history_like, torch.Tensor):
+                    t = history_like
+                    # (T,B,C,H,W)
+                    if t.ndim == 5:
+                        return [t[i] for i in range(t.shape[0])]
+                    # (T,C,H,W) OR (B,C,H,W)
+                    if t.ndim == 4 and t.shape[0] > 1 and t.shape[1] == n_cell_types:
+                        # Very likely (T,C,H,W)
+                        return [t[i] for i in range(t.shape[0])]
+                    return [t]
+
+                return []
+
             # Convert frames to numpy arrays (cell type classifications)
             frame_images = []
-            for frame in frames:
-                if isinstance(frame, torch.Tensor):
-                    # Get cell type classification
-                    cell_types = frame.argmax(dim=1).cpu().numpy()
-                    if len(cell_types.shape) == 3:
-                        cell_types = cell_types[0]  # Remove batch dimension
-                    frame_images.append(cell_types)
+            for frame_like in _flatten_to_frame_list(history):
+                labels = _as_numpy_label_grid(frame_like)
+                if labels is not None:
+                    frame_images.append(labels)
             
             if len(frame_images) == 0:
                 continue
             
             # Create color map for cell types
-            n_cell_types = len(ComplexCellType)
             colors = plt.cm.tab10(np.linspace(0, 1, n_cell_types))
             cmap = plt.cm.colors.ListedColormap(colors)
             
