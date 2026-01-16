@@ -44,7 +44,8 @@ class NeighborhoodSizeAnalyzer:
     
     def __init__(self, results_dir: str, histories_path: str, 
                  device: str = "auto", n_evaluations: int = 10,
-                 step_lengths: List[int] = [35, 100, 500]):
+                 step_lengths: List[int] = [35, 100, 500],
+                 model_files: Optional[Dict[str, List[str]]] = None):
         """
         Initialize analyzer
         
@@ -53,6 +54,8 @@ class NeighborhoodSizeAnalyzer:
             histories_path: Path to histories.npy file
             device: Computing device
             n_evaluations: Number of evaluations for stochastic models
+            model_files: Optional mapping from model label -> list of checkpoint filenames to try
+                inside each NB_k folder. If omitted, defaults to the standard checkpoint names.
         """
         self.results_dir = Path(results_dir)
         self.histories_path = histories_path
@@ -74,20 +77,45 @@ class NeighborhoodSizeAnalyzer:
         # Storage for results
         self.metrics_data = {}
         self.computational_times = {}
+
+        # Which checkpoint filenames to search for in each NB_k folder.
+        # Keys must match the labels used in _evaluate_models.
+        default_model_files: Dict[str, List[str]] = {
+            "Mixture NCA": ["mixture_nca_1000.pt", "mixture_nca.pt"],
+            "Stochastic Mixture NCA": ["stochastic_mix_nca_1000.pt", "stochastic_mix_nca.pt"],
+        }
+        self.model_files: Dict[str, List[str]] = default_model_files
+        if model_files:
+            # Allow partial override (e.g., only override one model’s filenames)
+            for k, v in model_files.items():
+                if isinstance(v, str):
+                    self.model_files[k] = [v]
+                else:
+                    self.model_files[k] = list(v)
         
     def load_or_evaluate_models(self, neighborhood_sizes: List[int] = [1, 2, 3, 4, 5, 6, 7],
-                                force_recompute: bool = False):
+                                force_recompute: bool = False,
+                                model_files: Optional[Dict[str, List[str]]] = None):
         """
         Load existing metrics or evaluate models to compute metrics
         
         Args:
             neighborhood_sizes: List of neighborhood sizes to analyze
             force_recompute: If True, recompute metrics even if CSV exists
+            model_files: Optional override for which checkpoint filenames to search for
+                inside each NB_k folder (same format as in __init__).
         """
         print(f"\n{'='*60}")
         print("Loading/Evaluating Models")
         print(f"{'='*60}\n")
         
+        if model_files:
+            for k, v in model_files.items():
+                if isinstance(v, str):
+                    self.model_files[k] = [v]
+                else:
+                    self.model_files[k] = list(v)
+
         all_results = []
         
         for nb_size in neighborhood_sizes:
@@ -157,23 +185,42 @@ class NeighborhoodSizeAnalyzer:
             device=self.device
         )
         
-        # Load model weights (try both _1000.pt and .pt suffixes)
-        def load_model_file(model, filename_base):
-            """Try loading with _1000.pt first, then .pt"""
-            file_1000 = exp_dir / f'{filename_base}_1000.pt'
-            file_regular = exp_dir / f'{filename_base}.pt'
-            
-            if file_1000.exists():
-                model.load_state_dict(torch.load(file_1000, map_location=self.device, weights_only=True))
-                print(f"    Loaded {filename_base}_1000.pt")
-            elif file_regular.exists():
-                model.load_state_dict(torch.load(file_regular, map_location=self.device, weights_only=True))
-                print(f"    Loaded {filename_base}.pt")
-            else:
-                raise FileNotFoundError(f"Model file not found: {filename_base}_1000.pt or {filename_base}.pt in {exp_dir}")
-        
-        load_model_file(mix_nca, 'mixture_nca')
-        load_model_file(stochastic_mix_nca, 'stochastic_mix_nca')
+        # Load model weights (configurable filenames)
+        def _normalize_candidates(candidates: List[str]) -> List[str]:
+            out: List[str] = []
+            for c in candidates:
+                c = str(c)
+                if not c.endswith(".pt"):
+                    c = f"{c}.pt"
+                out.append(c)
+            return out
+
+        def load_model_file(model, label: str):
+            candidates = self.model_files.get(label, [])
+            if isinstance(candidates, str):
+                candidates = [candidates]
+            candidates = _normalize_candidates(list(candidates))
+
+            if not candidates:
+                raise ValueError(
+                    f"No checkpoint candidates configured for '{label}'. "
+                    f"Configure via NeighborhoodSizeAnalyzer(..., model_files={{'{label}': ['file.pt', ...]}}) "
+                    f"or via load_or_evaluate_models(model_files=...)."
+                )
+
+            for fname in candidates:
+                p = exp_dir / fname
+                if p.exists():
+                    model.load_state_dict(torch.load(p, map_location=self.device, weights_only=True))
+                    print(f"    Loaded {label}: {fname}")
+                    return
+
+            raise FileNotFoundError(
+                f"No checkpoint found for '{label}' in {exp_dir}. Tried: {candidates}"
+            )
+
+        load_model_file(mix_nca, "Mixture NCA")
+        load_model_file(stochastic_mix_nca, "Stochastic Mixture NCA")
         
         # Evaluate and get raw data (only Mixture and Stochastic)
         results_df, raw_data = self._evaluate_with_raw_data(
