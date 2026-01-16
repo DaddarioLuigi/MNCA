@@ -234,10 +234,10 @@ def compare_generated_distributions(
     
     Args:
         histories: List of true state histories
-        standard_nca: Standard NCA model
-        mixture_nca: Mixture NCA model
-        stochastic_nca: Stochastic Mixture NCA model
-        nca_with_noise: NCA model with normal distribution output
+        standard_nca: Standard NCA model (optional; if None, it will be skipped)
+        mixture_nca: Mixture NCA model (optional; if None, it will be skipped)
+        stochastic_nca: Stochastic Mixture NCA model (optional; if None, it will be skipped)
+        nca_with_noise: NCA model with normal distribution output (optional; if None, it will be skipped)
         n_steps: Number of steps for generation
         n_evaluations: Number of times to evaluate stochastic models
         device: Computing device
@@ -268,19 +268,6 @@ def compare_generated_distributions(
         'Spatial Variance Diff SD': []
     }
     
-    # Generate from standard NCA (deterministic, only once)
-    with torch.no_grad():
-        standard_samples = []
-        for true_state in initial_states:
-            result = standard_nca(true_state, n_steps, return_history=True)
-            # ExtendedNCA returns (x, frames) tuple, NCA returns stacked frames
-            if isinstance(result, tuple):
-                sample = result[1][-1] if len(result[1]) > 0 else result[0]
-            else:
-                sample = result[-1]
-            standard_samples.append(sample.argmax(dim=1))
-        standard_gen = torch.stack(standard_samples).squeeze(1)
-    
     # Create mapping for metric names
     metric_mapping = {
         'kl_divergence': 'KL Divergence',
@@ -298,6 +285,10 @@ def compare_generated_distributions(
         ('Stochastic Mixture NCA', stochastic_nca),
         ('NCA with Noise', nca_with_noise)
     ]:
+        # Allow callers to pass None for unavailable models (e.g. some neighborhood sizes)
+        if model is None:
+            continue
+
         # For stochastic models and NCA with noise, evaluate multiple times
         if name != 'Standard NCA':
             all_metrics = {
@@ -320,7 +311,10 @@ def compare_generated_distributions(
                                 current_state = true_state
                                 for _ in range(n_steps):
                                     class_assignment = torch.argmax(current_state, dim=1)
-                                    class_assignment = torch.nn.functional.one_hot(class_assignment, num_classes=6)
+                                    class_assignment = torch.nn.functional.one_hot(
+                                        class_assignment,
+                                        num_classes=len(ComplexCellType),
+                                    )
                                     class_assignment = class_assignment.transpose(1,3).transpose(2, 3)
                                     current_state = model(current_state, 1, return_history=False, class_assignment = class_assignment)
                                 sample = current_state
@@ -377,6 +371,18 @@ def compare_generated_distributions(
         
         else:
             # For standard NCA, just evaluate once
+            with torch.no_grad():
+                standard_samples = []
+                for true_state in initial_states:
+                    result = model(true_state, n_steps, return_history=True)
+                    # ExtendedNCA returns (x, frames) tuple, NCA returns stacked frames
+                    if isinstance(result, tuple):
+                        sample = result[1][-1] if len(result[1]) > 0 else result[0]
+                    else:
+                        sample = result[-1]
+                    standard_samples.append(sample.argmax(dim=1))
+                standard_gen = torch.stack(standard_samples).squeeze(1)
+
             bio_metrics = BiologicalMetrics(true_dataset, standard_gen, list(ComplexCellType), device)
             
             dist_metrics = bio_metrics.distribution_metrics()
@@ -399,6 +405,12 @@ def compare_generated_distributions(
     # Create DataFrame with metrics and standard deviations
     df = pd.DataFrame(metrics)
     
+    if df.empty:
+        raise ValueError(
+            "compare_generated_distributions: no models were evaluated. "
+            "All provided model arguments were None."
+        )
+
     return df
 
 column_renames_spatial = {
