@@ -241,7 +241,7 @@ class NeighborhoodSizeAnalyzer:
         load_model_file(stochastic_mix_nca, "Stochastic Mixture NCA")
         
         # Evaluate and get raw data (only Mixture and Stochastic)
-        results_df, raw_data = self._evaluate_with_raw_data(
+        results_df, raw_data, raw_per_sim_data = self._evaluate_with_raw_data(
             mix_nca=mix_nca.to(self.device),
             stochastic_mix_nca=stochastic_mix_nca.to(self.device),
             nb_size=nb_size
@@ -253,6 +253,20 @@ class NeighborhoodSizeAnalyzer:
         with open(raw_data_path, 'wb') as f:
             pickle.dump(raw_data, f)
         print(f"Saved raw data to {raw_data_path}")
+
+        # Save per-simulation raw data (one row per history/sample)
+        raw_per_sim_path = exp_dir / 'raw_metrics_per_simulation.pkl'
+        with open(raw_per_sim_path, 'wb') as f:
+            pickle.dump(raw_per_sim_data, f)
+        print(f"Saved per-simulation raw data to {raw_per_sim_path}")
+
+        try:
+            raw_per_sim_df = pd.DataFrame(raw_per_sim_data)
+            raw_per_sim_csv = exp_dir / 'raw_metrics_per_simulation.csv'
+            raw_per_sim_df.to_csv(raw_per_sim_csv, index=False)
+            print(f"Saved per-simulation raw data CSV to {raw_per_sim_csv}")
+        except Exception as e:
+            print(f"Warning: could not save per-simulation CSV: {e}")
         
         # Save individual results
         metrics_path = exp_dir / 'biological_metrics.csv'
@@ -271,6 +285,7 @@ class NeighborhoodSizeAnalyzer:
         from mix_NCA.BiologicalMetrics import BiologicalMetrics
         from mix_NCA.TissueModel import ComplexCellType
         from tqdm import tqdm
+        import torch.nn.functional as F
         
         # Collect all true states and stack them into a batch
         # OPTIMIZATION: Process all histories in batch instead of individually
@@ -287,7 +302,7 @@ class NeighborhoodSizeAnalyzer:
         # Stack all true states
         true_dataset = torch.cat([torch.tensor(ts[-1]).to(self.device).unsqueeze(0) for ts in self.histories], dim=0)
         
-        # Store raw data for statistical tests
+        # Store raw data for statistical tests (dataset-level metrics per evaluation)
         raw_data = {
             'Model Type': [],
             'Neighborhood Size': [],
@@ -300,6 +315,85 @@ class NeighborhoodSizeAnalyzer:
             'Border Size Diff': [],
             'Spatial Variance Diff': []
         }
+
+        # Store raw per-simulation data (one row per history/sample)
+        raw_per_sim_data = {
+            'Model Type': [],
+            'Neighborhood Size': [],
+            'Step Length': [],
+            'Evaluation': [],
+            'Simulation': [],
+            'KL Divergence': [],
+            'Chi-Square': [],
+            'Categorical MMD': [],
+            'Tumor Size Diff': [],
+            'Border Size Diff': [],
+            'Spatial Variance Diff': [],
+        }
+
+        # --- Helpers for per-simulation metrics (operate on integer grids [N,H,W]) ---
+        n_types = len(ComplexCellType)
+        empty_idx = ComplexCellType.EMPTY.value
+
+        def _per_sample_type_probs(x_int: torch.Tensor) -> torch.Tensor:
+            """Return per-sample categorical distribution over cell types: [N, n_types]."""
+            n = x_int.shape[0]
+            flat = x_int.view(n, -1)
+            counts = torch.zeros((n, n_types), device=x_int.device, dtype=torch.float32)
+            for t in range(n_types):
+                counts[:, t] = (flat == t).float().sum(dim=1)
+            if 0 <= empty_idx < n_types:
+                counts[:, empty_idx] = 0.0
+            probs = counts / (counts.sum(dim=1, keepdim=True) + 1e-8)
+            return probs
+
+        def _per_sample_kl_chi(true_int: torch.Tensor, gen_int: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+            p = _per_sample_type_probs(true_int)
+            q = _per_sample_type_probs(gen_int)
+            kl = torch.sum(p * torch.log((p + 1e-8) / (q + 1e-8)), dim=1)
+            chi = torch.sum((p - q) ** 2 / (p + q + 1e-8), dim=1)
+            return kl, chi
+
+        def _per_sample_categorical_mmd_proxy(true_int: torch.Tensor, gen_int: torch.Tensor) -> torch.Tensor:
+            """Per-simulation proxy for categorical MMD: MMD on batches of size 1 => 2*(1 - match_rate)."""
+            tflat = true_int.view(true_int.shape[0], -1)
+            gflat = gen_int.view(gen_int.shape[0], -1)
+            match_rate = (tflat == gflat).float().mean(dim=1)
+            return 2.0 * (1.0 - match_rate)
+
+        def _border_size_and_spatial_variance(x_int: torch.Tensor) -> Tuple[torch.Tensor, torch.Tensor]:
+            """Compute per-sample border size and spatial variance for non-empty mask."""
+            mask = (x_int > 0).float()  # [N,H,W]
+
+            # Border size via edge detection conv (batch)
+            kernel = torch.tensor([
+                [-1, -1, -1],
+                [-1,  8, -1],
+                [-1, -1, -1]
+            ], device=self.device).float() / 8.0
+            kernel = kernel.view(1, 1, 3, 3)
+            edges = (torch.abs(F.conv2d(mask.unsqueeze(1), kernel, padding=1)) > 0.25).float()
+            border_size = edges.sum(dim=(1, 2, 3))  # [N]
+
+            # Spatial variance of non-empty positions (vectorized)
+            n, h, w = mask.shape
+            yy = torch.arange(h, device=self.device, dtype=torch.float32).view(1, h, 1)
+            xx = torch.arange(w, device=self.device, dtype=torch.float32).view(1, 1, w)
+            cnt = mask.sum(dim=(1, 2)).clamp_min(1.0)
+            mean_y = (mask * yy).sum(dim=(1, 2)) / cnt
+            mean_x = (mask * xx).sum(dim=(1, 2)) / cnt
+            dy2 = (yy - mean_y.view(n, 1, 1)) ** 2
+            dx2 = (xx - mean_x.view(n, 1, 1)) ** 2
+            spatial_var = (mask * (dy2 + dx2)).sum(dim=(1, 2)) / cnt
+            return border_size, spatial_var
+
+        # Precompute true per-sample quantities and normalization denominators
+        true_int = true_dataset.long()
+        true_tumor_sizes = (true_int > 0).float().view(true_int.shape[0], -1).sum(dim=1)
+        mean_true_tumor = true_tumor_sizes.mean().item() + 1e-8
+        true_border_sizes, true_spatial_vars = _border_size_and_spatial_variance(true_int)
+        mean_true_border = true_border_sizes.mean().item() + 1e-8
+        mean_true_spvar = true_spatial_vars.mean().item() + 1e-8
         
         # Calculate total iterations for progress bar
         total_iterations = len(self.step_lengths) * 2 * self.n_evaluations
@@ -342,6 +436,31 @@ class NeighborhoodSizeAnalyzer:
                     raw_data['Tumor Size Diff'].append(bio_metrics.tumor_size_distribution())
                     raw_data['Border Size Diff'].append(spatial_metrics['border_size_diff'])
                     raw_data['Spatial Variance Diff'].append(spatial_metrics['spatial_variance_diff'])
+
+                    # Per-simulation metrics (one value per history/sample)
+                    gen_int = generated.long()
+                    kl_ps, chi_ps = _per_sample_kl_chi(true_int, gen_int)
+                    mmd_ps = _per_sample_categorical_mmd_proxy(true_int, gen_int)
+                    gen_tumor_sizes = (gen_int > 0).float().view(gen_int.shape[0], -1).sum(dim=1)
+                    tumor_ps = (true_tumor_sizes - gen_tumor_sizes).abs() / mean_true_tumor
+
+                    gen_border_sizes, gen_spatial_vars = _border_size_and_spatial_variance(gen_int)
+                    border_ps = (true_border_sizes - gen_border_sizes).abs() / mean_true_border
+                    spvar_ps = (true_spatial_vars - gen_spatial_vars).abs() / mean_true_spvar
+
+                    n_samples = gen_int.shape[0]
+                    for sim_idx in range(n_samples):
+                        raw_per_sim_data['Model Type'].append(name)
+                        raw_per_sim_data['Neighborhood Size'].append(nb_size)
+                        raw_per_sim_data['Step Length'].append(n_steps)
+                        raw_per_sim_data['Evaluation'].append(eval_idx)
+                        raw_per_sim_data['Simulation'].append(sim_idx)
+                        raw_per_sim_data['KL Divergence'].append(float(kl_ps[sim_idx].item()))
+                        raw_per_sim_data['Chi-Square'].append(float(chi_ps[sim_idx].item()))
+                        raw_per_sim_data['Categorical MMD'].append(float(mmd_ps[sim_idx].item()))
+                        raw_per_sim_data['Tumor Size Diff'].append(float(tumor_ps[sim_idx].item()))
+                        raw_per_sim_data['Border Size Diff'].append(float(border_ps[sim_idx].item()))
+                        raw_per_sim_data['Spatial Variance Diff'].append(float(spvar_ps[sim_idx].item()))
                     
                     pbar.update(1)
         
@@ -398,7 +517,7 @@ class NeighborhoodSizeAnalyzer:
         results_df = pd.DataFrame(results_dict)
         results_df['Neighborhood Size'] = nb_size
         
-        return results_df, raw_data
+        return results_df, raw_data, raw_per_sim_data
     
     def parse_metrics(self) -> pd.DataFrame:
         """Parse metrics from string format to numeric values"""
