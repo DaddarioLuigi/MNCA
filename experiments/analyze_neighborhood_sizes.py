@@ -845,6 +845,169 @@ class NeighborhoodSizeAnalyzer:
             print()
         
         return pd.DataFrame(complexity_results)
+
+    def rule_entropy_over_time(
+        self,
+        neighborhood_sizes: List[int] = [1, 2, 3, 4, 5, 6, 7],
+        n_samples: int = 20,
+        time_stride: int = 1,
+        max_time_steps: Optional[int] = None,
+        seed: int = 0,
+        output_filename: str = "rule_entropy_over_time.csv",
+    ) -> pd.DataFrame:
+        """
+        Compute how rule-assignment entropy evolves over time (time step) for each NB size.
+
+        Entropy is computed per spatial location from the model's rule probabilities
+        and then averaged over space; results are aggregated across sampled histories.
+
+        Output:
+            A dataframe with columns:
+                - Model Type
+                - Neighborhood Size
+                - Time Step
+                - Mean Entropy
+                - Std Entropy
+                - N Samples
+        """
+        if time_stride < 1:
+            raise ValueError("time_stride must be >= 1")
+
+        if len(self.histories) == 0:
+            raise ValueError("No histories loaded.")
+
+        rng = np.random.default_rng(seed)
+        n_available = len(self.histories)
+        n_use = min(int(n_samples), n_available)
+        sample_indices = rng.choice(n_available, size=n_use, replace=False)
+
+        # Determine a safe common time horizon across histories (some datasets may have variable length)
+        min_len = min(len(h) for h in self.histories)
+        t_max = min_len if max_time_steps is None else min(int(max_time_steps), min_len)
+        time_steps = list(range(0, t_max, int(time_stride)))
+        if len(time_steps) == 0:
+            raise ValueError("No time steps selected (check max_time_steps/time_stride).")
+
+        def make_update_net_fn(device):
+            def update_net_wrapper(n_channels, hidden_dims=128, n_channels_out=None, device_arg=None):
+                return classification_update_net(n_channels, hidden_dims, n_channels_out, device=device)
+            return update_net_wrapper
+
+        update_net_fn = make_update_net_fn(self.device)
+
+        def _load_model_for_nb(exp_dir: Path, label: str, nb_size: int):
+            if label == "Mixture NCA":
+                model = ExtendedMixtureNCA(
+                    update_nets=update_net_fn,
+                    hidden_dim=self.HIDDEN_DIM,
+                    maintain_seed=False,
+                    use_alive_mask=False,
+                    state_dim=self.STATE_DIM,
+                    num_rules=self.N_RULES,
+                    residual=False,
+                    temperature=3,
+                    neighborhood_size=nb_size,
+                    device=self.device,
+                )
+            elif label == "Stochastic Mixture NCA":
+                model = ExtendedMixtureNCANoise(
+                    update_nets=update_net_fn,
+                    hidden_dim=self.HIDDEN_DIM,
+                    maintain_seed=False,
+                    use_alive_mask=False,
+                    state_dim=self.STATE_DIM,
+                    num_rules=self.N_RULES,
+                    residual=False,
+                    temperature=3,
+                    neighborhood_size=nb_size,
+                    device=self.device,
+                )
+            else:
+                raise ValueError(f"Unsupported label: {label}")
+
+            candidates = self.model_files.get(label, [])
+            if isinstance(candidates, str):
+                candidates = [candidates]
+            candidates = list(candidates)
+            tried = []
+            for fname in candidates:
+                fname = str(fname)
+                if not fname.endswith(".pt"):
+                    fname = f"{fname}.pt"
+                tried.append(fname)
+                p = exp_dir / fname
+                if p.exists():
+                    model.load_state_dict(torch.load(p, map_location=self.device, weights_only=True))
+                    model = model.to(self.device)
+                    model.eval()
+                    return model, fname
+
+            raise FileNotFoundError(f"No checkpoint found for '{label}' in {exp_dir}. Tried: {tried}")
+
+        rows = []
+        eps = 1e-12
+
+        print(f"\n{'='*60}")
+        print("Rule Entropy Over Time (time step) Analysis")
+        print(f"{'='*60}")
+        print(f"Using {n_use}/{n_available} histories, time_steps={len(time_steps)} (stride={time_stride}, t_max={t_max})")
+
+        for nb_size in neighborhood_sizes:
+            exp_dir = self.base_dir / f"NB_{nb_size}"
+            if not exp_dir.exists():
+                print(f"Warning: Directory {exp_dir} does not exist. Skipping nb_size={nb_size}")
+                continue
+
+            # Load both models for this NB
+            loaded = {}
+            for label in ["Mixture NCA", "Stochastic Mixture NCA"]:
+                try:
+                    model, ckpt = _load_model_for_nb(exp_dir, label, nb_size)
+                    loaded[label] = model
+                    print(f"  NB={nb_size}: loaded {label} ({ckpt})")
+                except Exception as e:
+                    print(f"  NB={nb_size}: could not load {label}: {e}")
+
+            if not loaded:
+                continue
+
+            with torch.no_grad():
+                for label, model in loaded.items():
+                    for t in time_steps:
+                        grids = [self.histories[i][t] for i in sample_indices]
+                        states = grid_to_channels_batch(grids, len(ComplexCellType), self.device)  # [B,C,H,W]
+
+                        probs = model.get_rule_probabilities(states)  # [B,R,H,W]
+                        p = probs.clamp_min(eps)
+                        ent_map = -(p * torch.log2(p)).sum(dim=1)  # [B,H,W]
+                        ent_per_sample = ent_map.mean(dim=(1, 2)).detach().cpu().numpy()  # [B]
+
+                        rows.append(
+                            {
+                                "Model Type": label,
+                                "Neighborhood Size": nb_size,
+                                "Time Step": int(t),
+                                "Mean Entropy": float(np.mean(ent_per_sample)),
+                                "Std Entropy": float(np.std(ent_per_sample)),
+                                "N Samples": int(n_use),
+                            }
+                        )
+
+            # Save per-NB CSV (handy for notebook consumption)
+            nb_df = pd.DataFrame([r for r in rows if r["Neighborhood Size"] == nb_size])
+            if len(nb_df) > 0:
+                out_path = exp_dir / output_filename
+                nb_df.to_csv(out_path, index=False)
+                print(f"  NB={nb_size}: saved {out_path}")
+
+        df = pd.DataFrame(rows)
+        if len(df) > 0:
+            out_all = self.base_dir / output_filename
+            df.to_csv(out_all, index=False)
+            print(f"\nSaved aggregated entropy-over-time CSV to {out_all}")
+        else:
+            print("No entropy-over-time results produced (no models loaded?).")
+        return df
     
     def create_visualizations(self, output_dir: Optional[str] = None):
         """Create comprehensive visualizations using Plotly (only for Mixture NCA and Stochastic Mixture NCA)"""
@@ -1412,6 +1575,14 @@ def main():
                        help='Comma-separated list of step lengths to test')
     parser.add_argument('--skip_plots', action='store_true',
                        help='Skip generating visualizations')
+    parser.add_argument('--rule_entropy_over_time', action='store_true',
+                       help='Compute rule-assignment entropy over time steps for each NB size and save CSVs')
+    parser.add_argument('--rule_entropy_n_samples', type=int, default=20,
+                       help='Number of histories to sample for entropy-over-time computation')
+    parser.add_argument('--rule_entropy_stride', type=int, default=1,
+                       help='Stride over time steps (e.g., 5 = every 5 steps)')
+    parser.add_argument('--rule_entropy_max_t', type=int, default=0,
+                       help='Max number of time steps to consider (0 = use full common horizon)')
     
     args = parser.parse_args()
     
@@ -1453,6 +1624,16 @@ def main():
     # Visualizations
     if not args.skip_plots:
         analyzer.create_visualizations()
+
+    # Rule entropy over time
+    if args.rule_entropy_over_time:
+        max_t = None if int(args.rule_entropy_max_t) <= 0 else int(args.rule_entropy_max_t)
+        analyzer.rule_entropy_over_time(
+            neighborhood_sizes=neighborhood_sizes,
+            n_samples=int(args.rule_entropy_n_samples),
+            time_stride=int(args.rule_entropy_stride),
+            max_time_steps=max_t,
+        )
     
     
     print("\n" + "="*60)
@@ -1464,6 +1645,9 @@ def main():
     print(f"  - performance_trends.csv: Trend analysis")
     print(f"  - computational_complexity.csv: Complexity analysis")
     print(f"  - neighborhood_size_analysis_report.txt: Comprehensive report")
+    if args.rule_entropy_over_time:
+        print(f"  - rule_entropy_over_time.csv: Entropy vs time step (aggregated)")
+        print(f"  - NB_*/rule_entropy_over_time.csv: Entropy vs time step (per NB)")
     if not args.skip_plots:
         print(f"  - analysis_plots/: Visualizations")
 
