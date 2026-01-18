@@ -538,8 +538,12 @@ class NeighborhoodSizeAnalyzer:
         
         return pd.DataFrame(trend_results)
     
-    def computational_complexity_analysis(self, n_samples: int = 5, 
-                                         model_type: str = "mixture") -> pd.DataFrame:
+    def computational_complexity_analysis(
+        self,
+        n_samples: int = 5,
+        model_type: str = "mixture",
+        checkpoint_filenames: Optional[object] = None,
+    ) -> pd.DataFrame:
         """
         Measure computational time for different neighborhood sizes
         
@@ -548,15 +552,20 @@ class NeighborhoodSizeAnalyzer:
             model_type: Type of model to analyze. Options:
                 - "mixture": Mixture NCA
                 - "stochastic": Stochastic Mixture NCA
+            checkpoint_filenames: Optional override for which checkpoint file(s) to load
+                inside each NB_k folder.
+                - If None (default): uses the standard names and tries multiple fallbacks.
+                - If str: tries that single filename (e.g., "mixture_nca.pt").
+                - If list[str]: tries the provided filenames in order.
         """
         print(f"\n{'='*60}")
         print(f"Computational Complexity Analysis - {model_type.upper()}")
         print(f"{'='*60}\n")
         
-        # Map model type to file name and model class (only Mixture and Stochastic)
+        # Map model type to checkpoint filenames and model class (only Mixture and Stochastic)
         model_configs = {
             "mixture": {
-                "file": "mixture_nca_1000.pt",
+                "files": ["mixture_nca_1000.pt", "mixture_nca.pt"],
                 "model_class": ExtendedMixtureNCA,
                 "init_kwargs": {
                     "update_nets": lambda n_channels, hidden_dims=128, n_channels_out=None, device_arg=None: 
@@ -571,7 +580,7 @@ class NeighborhoodSizeAnalyzer:
                 }
             },
             "stochastic": {
-                "file": "stochastic_mix_nca_1000.pt",
+                "files": ["stochastic_mix_nca_1000.pt", "stochastic_mix_nca.pt"],
                 "model_class": ExtendedMixtureNCANoise,
                 "init_kwargs": {
                     "update_nets": lambda n_channels, hidden_dims=128, n_channels_out=None, device_arg=None: 
@@ -607,21 +616,32 @@ class NeighborhoodSizeAnalyzer:
         # Store baseline time (NB=3) for normalization
         baseline_time = None
         
+        # Normalize checkpoint_filenames -> list[str] (or None)
+        if checkpoint_filenames is None:
+            checkpoint_candidates = None
+        elif isinstance(checkpoint_filenames, str):
+            checkpoint_candidates = [checkpoint_filenames]
+        else:
+            # best-effort: allow any iterable of strings (e.g., list/tuple)
+            checkpoint_candidates = list(checkpoint_filenames)
+
         for nb_size in [1, 2, 3, 4, 5, 6, 7]:
             exp_dir = self.base_dir / f"NB_{nb_size}"
             if not exp_dir.exists():
                 continue
             
-            # Try both _1000.pt and .pt suffixes
-            model_file_1000 = exp_dir / config["file"]
-            model_file_regular = exp_dir / config["file"].replace("_1000.pt", ".pt")
-            
-            if model_file_1000.exists():
-                model_file = model_file_1000
-            elif model_file_regular.exists():
-                model_file = model_file_regular
-            else:
-                print(f"  Skipping NB_{nb_size}: {config['file']} or {config['file'].replace('_1000.pt', '.pt')} not found")
+            # Resolve checkpoint path:
+            # - default: try standard filenames for this model_type
+            # - override: try user-provided filename(s) in order
+            candidate_names = checkpoint_candidates if checkpoint_candidates is not None else config["files"]
+            model_file = None
+            for fname in candidate_names:
+                p = exp_dir / fname
+                if p.exists():
+                    model_file = p
+                    break
+            if model_file is None:
+                print(f"  Skipping NB_{nb_size}: none of these checkpoints found: {candidate_names}")
                 continue
             
             print(f"Testing NB_{nb_size} ({model_type})...")
