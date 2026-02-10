@@ -5,4 +5,21 @@
 
 \epigraph{\enquote{Somewhere, something incredible is waiting to be known.}}{\emph{Carl Sagan}}
 
-This chapter shows the results obtained in the thesis.
+This chapter provides a short, high-level summary of the overall thesis findings.
+Detailed results for the neighborhood-size sweep (including metrics, per-simulation diagnostics, and ablations) are reported in \cref{c:implementation}, because they are tightly connected to the experimental pipeline design.
+
+\section{Overall findings}
+\label{sec:results:overall}
+
+Across all experiments, we find that:
+\begin{itemize}
+\item \textbf{Neighborhood size matters, but mainly at the first step:} moving from \(NB=1\) to \(NB\ge2\) yields a large improvement in stability and quality.
+\item \textbf{Bigger is not always better:} for \(NB\ge2\), performance does not improve monotonically and depends on the metric and rollout horizon.
+\item \textbf{Evaluation protocol is critical:} differences across neighborhood sizes are easiest to interpret when training and evaluation are consistent (sampling/temperature choices) and when models are assessed at multiple rollout horizons.
+\end{itemize}
+
+\section{Thesis takeaway}
+\label{sec:results:takeaway}
+
+The main takeaway of this thesis is that MNCA can model tissue-like dynamics in a controlled synthetic setting, but careful experimental design is required to obtain interpretable conclusions.
+In particular, the neighborhood-size effect can be masked by training/evaluation confounds when models already fail at long-horizon rollouts.

@@ -1,0 +1,1479 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>MNCA Neighborhood Analysis | Thesis Presentation</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-primary: #ffffff;
+            --bg-secondary: #f8fafc;
+            --bg-card: #f1f5f9;
+            --accent-primary: #4f46e5;
+            --accent-secondary: #7c3aed;
+            --accent-tertiary: #0891b2;
+            --text-primary: #1e293b;
+            --text-secondary: #475569;
+            --text-muted: #64748b;
+            --border-color: #e2e8f0;
+            --gradient-primary: #4f46e5;
+            --gradient-bg: #f1f5f9;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+            scroll-snap-type: y mandatory;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background: var(--bg-primary);
+            color: var(--text-primary);
+            line-height: 1.6;
+            overflow-x: hidden;
+        }
+
+        /* Navigation */
+        nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            padding: 1rem 2rem;
+            background: #ffffff;
+            border-bottom: 1px solid var(--border-color);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav-brand {
+            font-weight: 600;
+            font-size: 1.1rem;
+            color: var(--accent-primary);
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+            list-style: none;
+        }
+
+        .nav-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: color 0.3s ease;
+        }
+
+        .nav-links a:hover {
+            color: var(--accent-primary);
+        }
+
+        .slide-counter {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+        }
+
+        /* Slides */
+        .slide {
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            padding: 6rem 4rem 4rem;
+            scroll-snap-align: start;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .slide::before {
+            display: none;
+        }
+
+        .slide-content {
+            max-width: 1400px;
+            margin: 0 auto;
+            width: 100%;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Title Slide */
+        .title-slide {
+            text-align: center;
+        }
+
+        .title-slide h1 {
+            font-size: 3.5rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            color: var(--accent-primary);
+            line-height: 1.2;
+        }
+
+        .title-slide .subtitle {
+            font-size: 1.5rem;
+            color: var(--text-secondary);
+            margin-bottom: 2rem;
+            font-weight: 300;
+        }
+
+        /* Center constrained text blocks on the title slide */
+        .title-slide p.subtitle {
+            max-width: 1000px;
+            margin-left: auto;
+            margin-right: auto;
+        }
+
+        .title-slide .meta {
+            font-size: 1rem;
+            color: var(--text-muted);
+        }
+
+        .title-slide .meta span {
+            display: inline-block;
+            margin: 0 1rem;
+        }
+
+        /* Section Headers */
+        .section-number {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            color: var(--accent-tertiary);
+            margin-bottom: 0.5rem;
+            letter-spacing: 2px;
+        }
+
+        h2 {
+            font-size: 2.5rem;
+            font-weight: 600;
+            margin-bottom: 1.5rem;
+            color: var(--text-primary);
+        }
+
+        h3 {
+            font-size: 1.5rem;
+            font-weight: 500;
+            margin-bottom: 1rem;
+            color: var(--text-primary);
+        }
+
+        p {
+            font-size: 1.1rem;
+            color: var(--text-secondary);
+            margin-bottom: 1rem;
+            max-width: 900px;
+        }
+
+        /* Cards */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 1.5rem;
+            margin-top: 2rem;
+        }
+
+        .card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 1.5rem;
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1);
+        }
+
+        .card-icon {
+            width: 48px;
+            height: 48px;
+            background: var(--accent-primary);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin-bottom: 1rem;
+            color: white;
+        }
+
+        .card h4 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--text-primary);
+        }
+
+        .card p {
+            font-size: 0.95rem;
+            color: var(--text-secondary);
+        }
+
+        /* Image containers */
+        .image-container {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 1.5rem;
+            margin-top: 1.5rem;
+            overflow: hidden;
+        }
+
+        .image-container img {
+            width: 100%;
+            height: auto;
+            border-radius: 8px;
+        }
+
+        .image-container.large {
+            padding: 2rem;
+        }
+
+        .image-caption {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            margin-top: 1rem;
+            text-align: center;
+            font-style: italic;
+        }
+
+        /* Two column layout */
+        .two-columns {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 3rem;
+            align-items: center;
+        }
+
+        .two-columns.text-first .text-column {
+            order: 0;
+        }
+
+        .two-columns.text-first .image-column {
+            order: 1;
+        }
+
+        /* Code blocks */
+        .equation-block {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.5rem 2rem;
+            font-size: 1.1rem;
+            color: var(--accent-tertiary);
+            margin: 1.5rem 0;
+            display: inline-block;
+        }
+
+        /* MathML tweaks */
+        .equation-block math {
+            font-size: 1.15rem;
+        }
+
+        .title-subtitle {
+            text-align: center;
+        }
+
+        .questions-centered {
+            text-align: center;
+        }
+
+        .logo-bicocca {
+            width: 72px;
+            height: auto;
+            opacity: 0.9;
+            margin: 1.25rem auto 0;
+            display: block;
+        }
+
+        /* Lists */
+        .feature-list {
+            list-style: none;
+            margin-top: 1.5rem;
+        }
+
+        .feature-list li {
+            display: flex;
+            align-items: flex-start;
+            gap: 1rem;
+            margin-bottom: 1rem;
+            font-size: 1.05rem;
+            color: var(--text-secondary);
+        }
+
+        .feature-list li::before {
+            content: '-';
+            color: var(--accent-primary);
+            font-weight: 600;
+            flex-shrink: 0;
+        }
+
+        /* Highlight boxes */
+        .highlight-box {
+            background: #eef2ff;
+            border: 1px solid #c7d2fe;
+            border-radius: 16px;
+            padding: 1.5rem 2rem;
+            margin: 1.5rem 0;
+        }
+
+        .highlight-box.success {
+            background: #f0fdf4;
+            border-color: #86efac;
+        }
+
+        .highlight-box.warning {
+            background: #fefce8;
+            border-color: #fde047;
+        }
+
+        /* Tables */
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 1.5rem;
+            font-size: 0.95rem;
+        }
+
+        .data-table th {
+            background: var(--bg-card);
+            padding: 1rem;
+            text-align: left;
+            font-weight: 600;
+            color: var(--text-primary);
+            border-bottom: 2px solid var(--border-color);
+        }
+
+        .data-table td {
+            padding: 1rem;
+            border-bottom: 1px solid var(--border-color);
+            color: var(--text-secondary);
+        }
+
+        .data-table tr:hover td {
+            background: #f1f5f9;
+        }
+
+        .data-table .highlight-cell {
+            color: var(--accent-primary);
+            font-weight: 600;
+        }
+
+        .data-table .bad-cell {
+            color: #ef4444;
+        }
+
+        .data-table .good-cell {
+            color: #22c55e;
+        }
+
+        /* Video container */
+        .video-container {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            overflow: hidden;
+            margin-top: 1.5rem;
+        }
+
+        .video-container video {
+            width: 100%;
+            display: block;
+        }
+
+        .video-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1.5rem;
+            margin-top: 1.5rem;
+        }
+
+        .video-item {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            overflow: hidden;
+        }
+
+        .video-item video {
+            width: 100%;
+            display: block;
+        }
+
+        .video-label {
+            padding: 1rem;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+            border-top: 1px solid var(--border-color);
+            text-align: center;
+        }
+
+        /* Stats */
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 1.5rem;
+            margin-top: 2rem;
+        }
+
+        .stat-card {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 16px;
+            padding: 1.5rem;
+            text-align: center;
+        }
+
+        .stat-value {
+            font-size: 2.5rem;
+            font-weight: 700;
+            color: var(--accent-primary);
+        }
+
+        .stat-label {
+            font-size: 0.9rem;
+            color: var(--text-muted);
+            margin-top: 0.5rem;
+        }
+
+        /* Key findings */
+        .finding-item {
+            display: flex;
+            gap: 1.5rem;
+            margin-bottom: 2rem;
+            align-items: flex-start;
+        }
+
+        .finding-number {
+            width: 48px;
+            height: 48px;
+            background: var(--accent-primary);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.2rem;
+            font-weight: 700;
+            flex-shrink: 0;
+            color: white;
+        }
+
+        .finding-content h4 {
+            font-size: 1.2rem;
+            font-weight: 600;
+            margin-bottom: 0.5rem;
+            color: var(--text-primary);
+        }
+
+        .finding-content p {
+            font-size: 1rem;
+            color: var(--text-secondary);
+        }
+
+        /* Progress indicator */
+        .progress-bar {
+            position: fixed;
+            top: 0;
+            left: 0;
+            height: 3px;
+            background: var(--accent-primary);
+            z-index: 1001;
+            transition: width 0.3s ease;
+        }
+
+        /* Keyboard nav hint */
+        .keyboard-hint {
+            position: fixed;
+            bottom: 2rem;
+            right: 2rem;
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 0.75rem 1rem;
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            display: flex;
+            gap: 0.5rem;
+            align-items: center;
+            z-index: 100;
+        }
+
+        .keyboard-hint kbd {
+            background: var(--bg-secondary);
+            border: 1px solid var(--border-color);
+            border-radius: 4px;
+            padding: 0.2rem 0.5rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+        }
+
+        /* Animation */
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .animate-in {
+            animation: fadeInUp 0.6s ease forwards;
+        }
+
+        .delay-1 { animation-delay: 0.1s; opacity: 0; }
+        .delay-2 { animation-delay: 0.2s; opacity: 0; }
+        .delay-3 { animation-delay: 0.3s; opacity: 0; }
+        .delay-4 { animation-delay: 0.4s; opacity: 0; }
+
+        /* Responsive */
+        @media (max-width: 1024px) {
+            .two-columns {
+                grid-template-columns: 1fr;
+            }
+            
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            .title-slide h1 {
+                font-size: 2.5rem;
+            }
+            
+            h2 {
+                font-size: 2rem;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .slide {
+                padding: 5rem 1.5rem 2rem;
+            }
+            
+            .nav-links {
+                display: none;
+            }
+            
+            .video-grid {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        /* Images row */
+        .images-row {
+            display: flex;
+            gap: 1.5rem;
+            margin-top: 1.5rem;
+        }
+
+        .images-row .image-container {
+            flex: 1;
+            margin-top: 0;
+        }
+
+        /* Metrics comparison */
+        .metric-comparison {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1rem;
+            margin-top: 1.5rem;
+        }
+
+        .metric-box {
+            background: var(--bg-card);
+            border: 1px solid var(--border-color);
+            border-radius: 12px;
+            padding: 1.25rem;
+            text-align: center;
+        }
+
+        .metric-box.bad {
+            border-color: #fca5a5;
+            background: #fef2f2;
+        }
+
+        .metric-box.good {
+            border-color: #86efac;
+            background: #f0fdf4;
+        }
+
+        .metric-box .metric-name {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            margin-bottom: 0.5rem;
+        }
+
+        .metric-box .metric-value {
+            font-size: 1.5rem;
+            font-weight: 600;
+        }
+
+        .metric-box.bad .metric-value {
+            color: #ef4444;
+        }
+
+        .metric-box.good .metric-value {
+            color: #22c55e;
+        }
+    </style>
+</head>
+<body>
+    <div class="progress-bar" id="progressBar"></div>
+
+    <nav>
+        <div class="nav-brand">MNCA</div>
+        <ul class="nav-links">
+            <li><a href="#intro">Introduction</a></li>
+            <li><a href="#context">Context</a></li>
+            <li><a href="#methodology">Methodology</a></li>
+            <li><a href="#results">Results</a></li>
+            <li><a href="#conclusions">Conclusions</a></li>
+        </ul>
+        <div class="slide-counter" id="slideCounter">1 / 16</div>
+    </nav>
+
+    <!-- SLIDE 1: Title -->
+    <section class="slide title-slide" id="intro">
+        <div class="slide-content">
+            <h1 class="animate-in">Neighborhood Size Analysis in<br>Mixture Neural Cellular Automata</h1>
+            <p class="subtitle animate-in delay-1 title-subtitle">Systematic evaluation of neighborhood size impact<br>on MNCA models for biological systems</p>
+            <img class="logo-bicocca animate-in delay-2" src="../thesis-latex/logos/logo-unimib.png" alt="University of Milano-Bicocca logo">
+            <div class="meta animate-in delay-2">
+                <span>Luigi Daddario</span>
+                <span>-</span>
+                <span>2026</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- SLIDE 2: What are NCAs -->
+    <section class="slide" id="context">
+        <div class="slide-content">
+            <div class="section-number">01 - CONTEXT</div>
+            <h2>What are Neural Cellular Automata?</h2>
+            <div class="two-columns text-first">
+                <div class="text-column">
+                    <p><strong>Neural Cellular Automata (NCA)</strong> are systems that combine:</p>
+                    <ul class="feature-list">
+                        <li>The local approach of classical cellular automata</li>
+                        <li>The learning capability of neural networks</li>
+                        <li>Update rules learned from data</li>
+                    </ul>
+                    <div class="equation-block">
+                        <math display="block">
+                            <msub>
+                                <mi>x</mi>
+                                <mrow><mi>t</mi><mo>+</mo><mn>1</mn></mrow>
+                            </msub>
+                            <mo>=</mo>
+                            <msub><mi>x</mi><mi>t</mi></msub>
+                            <mo>+</mo>
+                            <msub><mi>f</mi><mi>θ</mi></msub>
+                            <mo>(</mo>
+                            <mi>𝒫</mi>
+                            <mo>(</mo>
+                            <msub><mi>x</mi><mi>t</mi></msub>
+                            <mo>)</mo>
+                            <mo>)</mo>
+                        </math>
+                    </div>
+                    <p>
+                        Where
+                        <strong>
+                            <math>
+                                <mi>𝒫</mi><mo>(</mo><mo>·</mo><mo>)</mo>
+                            </math>
+                        </strong>
+                        is a local perception operator and
+                        <strong>
+                            <math>
+                                <msub><mi>f</mi><mi>θ</mi></msub>
+                            </math>
+                        </strong>
+                        is a neural network that predicts the update.
+                    </p>
+                </div>
+                <div class="image-column">
+                    <div class="cards-grid" style="grid-template-columns: 1fr;">
+                        <div class="card">
+                            <div class="card-icon">L</div>
+                            <h4>Locality</h4>
+                            <p>Each cell updates its state based only on immediate neighbors</p>
+                        </div>
+                        <div class="card">
+                            <div class="card-icon">I</div>
+                            <h4>Iterativity</h4>
+                            <p>The same rule is applied repeatedly over time</p>
+                        </div>
+                        <div class="card">
+                            <div class="card-icon">E</div>
+                            <h4>Emergence</h4>
+                            <p>Complex behaviors emerge from simple rules</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SLIDE 3: What are MNCAs -->
+    <section class="slide">
+        <div class="slide-content">
+            <div class="section-number">01 - CONTEXT</div>
+            <h2>Mixture Neural Cellular Automata (MNCA)</h2>
+            <div class="two-columns">
+                <div class="text-column">
+                    <p><strong>Mixture NCA</strong> extend standard NCAs by integrating:</p>
+                    <ul class="feature-list">
+                        <li><strong>Multiple update rules</strong> instead of a single one</li>
+                        <li><strong>Probabilistic selection</strong> of rules based on local state</li>
+                        <li><strong>Intrinsic noise</strong> (stochastic variant) to model biological processes</li>
+                    </ul>
+                    <div class="highlight-box">
+                        <h4 style="color: var(--accent-primary); margin-bottom: 0.5rem;">Why MNCA?</h4>
+                        <p style="margin-bottom: 0;">Biological systems rarely follow a single deterministic rule. MNCA can capture the variety and stochasticity of natural processes.</p>
+                    </div>
+                </div>
+                <div class="image-column">
+                    <div class="image-container">
+                        <img src="assets/mnca_architecture.png" alt="MNCA architecture: neighboured perception, spatial filters, rule selector (MLP), stochasticity injection, probabilistic rule selection">
+                        <div class="image-caption">MNCA: perception, spatial filters, rule selector, stochasticity, and probabilistic rule selection</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SLIDE 4: Data Generation -->
+    <section class="slide">
+        <div class="slide-content">
+            <div class="section-number">01 - CONTEXT</div>
+            <h2>Data Generation: Biological Simulator</h2>
+            <p>Before training MNCAs, we generate supervised trajectories using a <strong>biologically-inspired stochastic simulator</strong>.</p>
+            <div class="two-columns">
+                <div class="text-column">
+                    <h3>Tissue Model</h3>
+                    <ul class="feature-list">
+                        <li><strong>2D grid</strong> of discrete cell types</li>
+                        <li>Differentiation hierarchy: STEM - INTERMEDIATE - DIFFERENTIATED</li>
+                        <li>At each step, each cell can: die, survive, or divide</li>
+                        <li>New cells can probabilistically differentiate</li>
+                    </ul>
+                    <div class="highlight-box success">
+                        <p style="margin-bottom: 0;"><strong>Goal:</strong> produce trajectories with growth and spatial organization that serve as supervised targets for learning local update rules.</p>
+                    </div>
+                </div>
+                <div class="image-column">
+                    <div class="image-container">
+                        <img src="../thesis-latex/figs/tissue_examples/history_generation_example.png" alt="History Generation Example">
+                        <div class="image-caption">Example of a generated history (ground truth) shown at multiple time steps</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SLIDE 5: Model Rollout -->
+    <section class="slide">
+        <div class="slide-content">
+            <div class="section-number">01 - CONTEXT</div>
+            <h2>Model Training and Rollout</h2>
+            <div class="two-columns text-first">
+                <div class="text-column">
+                    <h3>Training Process</h3>
+                    <ul class="feature-list">
+                        <li>Models optimized on <strong>short temporal windows</strong> extracted from histories</li>
+                        <li>Teacher-forced supervision during training</li>
+                        <li>Evaluation as <strong>free-running rollout</strong> (without teacher forcing)</li>
+                    </ul>
+                    <div class="highlight-box warning">
+                        <p style="margin-bottom: 0;"><strong>Key challenge:</strong> low short-term loss does not automatically guarantee long-term stability!</p>
+                    </div>
+                    <h3 style="margin-top: 1.5rem;">Multi-step Generation</h3>
+                    <p>After training, we use the model to generate trajectories starting from an initial state and iterating the learned rule.</p>
+                </div>
+                <div class="image-column">
+                    <div class="image-container">
+                        <img src="../thesis-latex/figs/tissue_examples/model_rollout_example.png" alt="Model Rollout Example">
+                        <div class="image-caption">Example of model-generated rollout, starting from the same initial condition as the ground truth</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SLIDE 6: Ground Truth vs Model (same initial condition, from sweep checkpoints) -->
+    <section class="slide" id="same-init">
+        <div class="slide-content">
+            <div class="section-number">01 - CONTEXT</div>
+            <h2>Same Initial Condition: Ground Truth vs Model (Sweep Checkpoints)</h2>
+            <p>All panels start from the exact same <strong>t=0</strong> state (sample 149 from the 300×100 dataset). Select model type and neighborhood size to compare against the ground truth trajectory.</p>
+
+            <div class="card" style="margin-top: 1.25rem;">
+                <div style="display:flex; gap: 1rem; flex-wrap: wrap; align-items: center;">
+                    <div style="display:flex; gap: 0.75rem; align-items: center;">
+                        <strong>Model</strong>
+                        <select id="sameInitModel" style="padding:0.5rem 0.75rem; border:1px solid var(--border-color); border-radius:10px; background:white; color:var(--text-primary);">
+                            <option value="mixture">Mixture MNCA</option>
+                            <option value="stochastic">Stochastic Mixture MNCA</option>
+                        </select>
+                    </div>
+                    <div style="display:flex; gap: 0.75rem; align-items: center;">
+                        <strong>Neighborhood</strong>
+                        <select id="sameInitNb" style="padding:0.5rem 0.75rem; border:1px solid var(--border-color); border-radius:10px; background:white; color:var(--text-primary);">
+                            <option value="3">NB=3</option>
+                            <option value="4">NB=4</option>
+                            <option value="5">NB=5</option>
+                            <option value="6">NB=6</option>
+                            <option value="7">NB=7</option>
+                        </select>
+                    </div>
+                    <div style="color:var(--text-muted); font-size:0.95rem;">
+                        Dataset: <code>histories_300_100.npy</code> • sample 149 • steps: 0/10/25/50/99
+                    </div>
+                </div>
+            </div>
+
+            <div class="two-columns" style="margin-top: 1rem;">
+                <div class="image-column">
+                    <div class="image-container">
+                        <img src="assets/same_init/sample_149/ground_truth.png" alt="Ground Truth (sample 149)" />
+                        <div class="image-caption">Ground truth (simulator) — sample 149</div>
+                    </div>
+                </div>
+                <div class="image-column">
+                    <div class="image-container">
+                        <img id="sameInitModelImg" src="assets/same_init/sample_149/mixture_nb_3.png" alt="Model rollout (same x0)" />
+                        <div id="sameInitCaption" class="image-caption">Mixture MNCA — NB=3 — rollout from same x0</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SLIDE 7: Research Question -->
+    <section class="slide" id="methodology">
+        <div class="slide-content">
+            <div class="section-number">02 - METHODOLOGY</div>
+            <h2>Research Question</h2>
+            <div class="highlight-box" style="text-align: center; padding: 3rem;">
+                <h3 style="font-size: 1.8rem; color: var(--text-primary); margin-bottom: 1rem;">
+                    Does it make sense to extend neighborhood size (NB) in MNCAs?
+                </h3>
+                <p style="font-size: 1.2rem; max-width: none; margin-bottom: 0;">
+                    What impact does increasing neighborhood size have on the quality and stability of long-term simulations?
+                </p>
+            </div>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value">NB</div>
+                    <div class="stat-label">Neighborhood Size</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">1-7</div>
+                    <div class="stat-label">Tested Range</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">2</div>
+                    <div class="stat-label">MNCA Variants</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">6</div>
+                    <div class="stat-label">Evaluated Metrics</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SLIDE 8: Steps 1-2 Summary -->
+    <section class="slide">
+        <div class="slide-content">
+            <div class="section-number">02 - METHODOLOGY</div>
+            <h2>Steps 1 and 2: Preliminary Experiments</h2>
+            <div class="cards-grid" style="grid-template-columns: 1fr 1fr;">
+                <div class="card">
+                    <div class="card-icon">1</div>
+                    <h4>Step 1: Paper-like Regime</h4>
+                    <ul class="feature-list">
+                        <li>200 trajectories x 35 time steps</li>
+                        <li>800 training epochs</li>
+                        <li>Setup similar to the original paper</li>
+                    </ul>
+                    <div class="highlight-box warning" style="margin-top: 1rem;">
+                        <p style="margin-bottom: 0; font-size: 0.9rem;"><strong>Result:</strong> Inconsistent rollouts, differences between NB too small to be conclusive.</p>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-icon">2</div>
+                    <h4>Step 2: Curriculum Learning</h4>
+                    <ul class="feature-list">
+                        <li>1000 trajectories x 500 time steps</li>
+                        <li>Progressive training: 35-100-500 steps</li>
+                        <li>Computationally expensive</li>
+                    </ul>
+                    <div class="highlight-box warning" style="margin-top: 1rem;">
+                        <p style="margin-bottom: 0; font-size: 0.9rem;"><strong>Problem:</strong> Models still failing, confounding factors masking the NB effect.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="highlight-box" style="margin-top: 2rem;">
+                <h4 style="color: var(--accent-primary); margin-bottom: 0.5rem;">Lesson Learned</h4>
+                <p style="margin-bottom: 0;">The neighborhood size effect can be masked by confounding factors when models are already failing at long rollouts. A more controlled experimental protocol is needed.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- SLIDE 9: Step 3 Configuration -->
+    <section class="slide">
+        <div class="slide-content">
+            <div class="section-number">02 - METHODOLOGY</div>
+            <h2>Step 3: Controlled Final Configuration</h2>
+            <p>We adopted a more controlled ablation to isolate the neighborhood size effect.</p>
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-value">300</div>
+                    <div class="stat-label">Trajectories</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">100</div>
+                    <div class="stat-label">Time Steps</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">35</div>
+                    <div class="stat-label">Training Length</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value">25/50/100</div>
+                    <div class="stat-label">Eval Horizons</div>
+                </div>
+            </div>
+            <div class="cards-grid" style="margin-top: 2rem;">
+                <div class="card">
+                    <div class="card-icon">C</div>
+                    <h4>Experimental Controls</h4>
+                    <p>Constant temperature, consistent sampling mode, same number of parameters for all models</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon">M</div>
+                    <h4>Multi-horizon Evaluation</h4>
+                    <p>Testing at 25, 50 and 100 steps to see how differences emerge at increasing rollouts</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon">6</div>
+                    <h4>Complete Metrics</h4>
+                    <p>KL divergence, Chi-square, MMD, Tumor Size, Border Size, Spatial Variance</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SLIDE 10: Results Dashboard -->
+    <section class="slide" id="results">
+        <div class="slide-content">
+            <div class="section-number">03 - RESULTS</div>
+            <h2>Metrics Dashboard: General Overview</h2>
+            <p>Mean and standard deviation for all six metrics, across all neighborhood sizes (NB=1...7)</p>
+            <div class="image-container large">
+                <img src="../thesis-latex/figs/neighborhood_analysis/nb_sweep_300x100/metrics_dashboard_full.png" alt="Metrics Dashboard">
+                <div class="image-caption">Complete dashboard: metric trends as neighborhood size varies</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SLIDE 11: Key Finding 1 - NB=1 is bad -->
+    <section class="slide">
+        <div class="slide-content">
+            <div class="section-number">03 - RESULTS</div>
+            <h2>Finding #1: NB=1 is Systematically Inadequate</h2>
+            <div class="two-columns">
+                <div class="text-column">
+                    <div class="highlight-box" style="border-color: #ef4444;">
+                        <h4 style="color: #ef4444; margin-bottom: 0.5rem;">Neighborhood Size = 1</h4>
+                        <p style="margin-bottom: 0;">With NB=1, models only have access to the cell itself. This leads to severe mismatch in the global composition of cell types.</p>
+                    </div>
+                    <h3 style="margin-top: 1.5rem;">KL Divergence: NB=1 vs NB>=2</h3>
+                    <div class="metric-comparison">
+                        <div class="metric-box bad">
+                            <div class="metric-name">NB=1 (Mixture)</div>
+                            <div class="metric-value">9.63</div>
+                        </div>
+                        <div class="metric-box good">
+                            <div class="metric-name">NB=2</div>
+                            <div class="metric-value">0.05</div>
+                        </div>
+                        <div class="metric-box good">
+                            <div class="metric-name">NB=3</div>
+                            <div class="metric-value">0.01</div>
+                        </div>
+                    </div>
+                    <p style="margin-top: 1rem;"><strong>Improvement: ~200x going from NB=1 to NB>=2</strong></p>
+                </div>
+                <div class="image-column">
+                    <div class="image-container">
+                        <img src="../thesis-latex/figs/neighborhood_analysis/nb_sweep_300x100/violin_KL_Divergence.png" alt="KL Divergence Violin Plot">
+                        <div class="image-caption">KL Divergence violin plot: NB=1 shows values orders of magnitude worse</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SLIDE 12: Key Finding 2 - Non-monotonic -->
+    <section class="slide">
+        <div class="slide-content">
+            <div class="section-number">03 - RESULTS</div>
+            <h2>Finding #2: Non-Monotonic Effect of Neighborhood Size</h2>
+            <div class="two-columns text-first">
+                <div class="text-column">
+                    <p>For <strong>NB>=2</strong>, performance does not improve monotonically with increasing neighborhood.</p>
+                    <div class="highlight-box">
+                        <h4 style="color: var(--accent-primary); margin-bottom: 0.5rem;">Observed Trade-off</h4>
+                        <p style="margin-bottom: 0;">Different neighborhood sizes balance differently:</p>
+                        <ul class="feature-list" style="margin-top: 0.5rem;">
+                            <li><strong>Distributional agreement</strong> (KL, Chi-Square, MMD)</li>
+                            <li><strong>Spatial fidelity</strong> (Tumor Size, Border, Variance)</li>
+                        </ul>
+                    </div>
+                    <p style="margin-top: 1rem;">Differences become more evident as the evaluation horizon increases (25-50-100 steps).</p>
+                </div>
+                <div class="image-column">
+                    <div class="image-container">
+                        <img src="../thesis-latex/figs/neighborhood_analysis/nb_sweep_300x100/violin_spatial_metrics.png" alt="Spatial Metrics Violin">
+                        <div class="image-caption">Spatial metrics: the trade-off varies across neighborhood sizes</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SLIDE 13: Fold Change Analysis -->
+    <section class="slide">
+        <div class="slide-content">
+            <div class="section-number">03 - RESULTS</div>
+            <h2>Fold Change Analysis: NB=7 vs NB=3</h2>
+            <p>Ratio of metrics between NB=7 and NB=3. Values &lt;1 indicate improvement, &gt;1 indicate degradation.</p>
+            <div class="image-container large">
+                <img src="../thesis-latex/figs/neighborhood_analysis/nb_sweep_300x100/trend_foldchange_nb7_over_nb3.png" alt="Fold Change">
+                <div class="image-caption">Fold change NB=7/NB=3: non-monotonic pattern, depends on metric and model</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SLIDE 14: Bad Rate Analysis -->
+    <section class="slide">
+        <div class="slide-content">
+            <div class="section-number">03 - RESULTS</div>
+            <h2>Robustness: Bad-Rate Analysis</h2>
+            <p>The <strong>bad-rate</strong> measures the fraction of simulations with "failure" outcome (beyond the 95th percentile of the best NB).</p>
+            <div class="images-row">
+                <div class="image-container">
+                    <img src="../thesis-latex/figs/neighborhood_analysis/nb_sweep_300x100/badrate_bars_KL_Divergence.png" alt="Bad Rate KL">
+                    <div class="image-caption">Bad-rate KL Divergence</div>
+                </div>
+                <div class="image-container">
+                    <img src="../thesis-latex/figs/neighborhood_analysis/nb_sweep_300x100/badrate_bars_Tumor_Size_Diff.png" alt="Bad Rate Tumor">
+                    <div class="image-caption">Bad-rate Tumor Size</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SLIDE 15: Computational Complexity -->
+    <section class="slide">
+        <div class="slide-content">
+            <div class="section-number">03 - RESULTS</div>
+            <h2>Computational Complexity</h2>
+            <div class="two-columns">
+                <div class="text-column">
+                    <p>Computational cost remains <strong>approximately constant</strong> in the range NB in [1,7].</p>
+                    <div class="highlight-box success">
+                        <h4 style="color: #22c55e; margin-bottom: 0.5rem;">Good News</h4>
+                        <p style="margin-bottom: 0;">Time per step does not scale with O(NB^2) in practice! The implementation is dominated by constants and vectorization effects.</p>
+                    </div>
+                    <h3 style="margin-top: 1.5rem;">Measured Times</h3>
+                    <table class="data-table">
+                        <tr>
+                            <th>Model</th>
+                            <th>Time/Step</th>
+                        </tr>
+                        <tr>
+                            <td>Mixture NCA</td>
+                            <td>~1.5 ms</td>
+                        </tr>
+                        <tr>
+                            <td>Stochastic Mixture</td>
+                            <td>~3.2 ms</td>
+                        </tr>
+                    </table>
+                </div>
+                <div class="image-column">
+                    <div class="image-container">
+                        <img src="../thesis-latex/figs/neighborhood_analysis/nb_sweep_300x100/computational_complexity_time_per_step.png" alt="Computational Complexity">
+                        <div class="image-caption">Time per step vs neighborhood size</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SLIDE 16: Rule Specialization -->
+    <section class="slide">
+        <div class="slide-content">
+            <div class="section-number">03 - RESULTS</div>
+            <h2>Rule Specialization</h2>
+            <p>How do rule selection and usage change as neighborhood size varies?</p>
+            <div class="images-row">
+                <div class="image-container">
+                    <img src="../thesis-latex/figs/neighborhood_analysis/nb_sweep_300x100/rule_entropy_over_time.png" alt="Rule Entropy">
+                    <div class="image-caption">Rule selection entropy over time</div>
+                </div>
+            </div>
+            <div class="image-container" style="margin-top: 1rem;">
+                <img src="../thesis-latex/figs/neighborhood_analysis/nb_sweep_300x100/rule_specialization_summary.png" alt="Rule Specialization Summary">
+                <div class="image-caption">Specialization summary: mean entropy, diversity, and relationship with KL divergence</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SLIDE 17: Rule Assignment Maps -->
+    <section class="slide">
+        <div class="slide-content">
+            <div class="section-number">03 - RESULTS</div>
+            <h2>Rule Assignment Maps</h2>
+            <p>Visualization of the selection probability of each rule by spatial position.</p>
+            <div class="images-row">
+                <div class="image-container">
+                    <img src="../thesis-latex/figs/neighborhood_analysis/nb_sweep_300x100/rule_assignment_maps_mixture.png" alt="Rule Maps Mixture">
+                    <div class="image-caption">Mixture NCA: rule probability maps</div>
+                </div>
+            </div>
+            <div class="image-container" style="margin-top: 1rem;">
+                <img src="../thesis-latex/figs/neighborhood_analysis/nb_sweep_300x100/rule_assignment_maps_stochastic.png" alt="Rule Maps Stochastic">
+                <div class="image-caption">Stochastic Mixture NCA: different specialization patterns</div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SLIDE 18: Video Demo (Mixture NCA) -->
+    <section class="slide">
+        <div class="slide-content">
+            <div class="section-number">03 - RESULTS</div>
+            <h2>Video Demo: Mixture MNCA (NB=3..7)</h2>
+            <p>Same sample (149), same horizon (100 steps). This uses the checkpoints in <code>tissue_simulation_nb_sweep_300x100/NB_k</code>.</p>
+            <div class="video-grid" style="grid-template-columns: repeat(3, 1fr);">
+                <div class="video-item">
+                    <video controls loop muted>
+                        <source src="../experiments/results_extended/tissue_simulation_nb_sweep_300x100/NB_3/videos/steps_100/mixture_nca_sample_149_nb_3.mp4" type="video/mp4">
+                    </video>
+                    <div class="video-label"><strong>NB=3</strong> - Mixture MNCA (Sample 149)</div>
+                </div>
+                <div class="video-item">
+                    <video controls loop muted>
+                        <source src="../experiments/results_extended/tissue_simulation_nb_sweep_300x100/NB_4/videos/steps_100/mixture_nca_sample_149_nb_4.mp4" type="video/mp4">
+                    </video>
+                    <div class="video-label"><strong>NB=4</strong> - Mixture MNCA (Sample 149)</div>
+                </div>
+                <div class="video-item">
+                    <video controls loop muted>
+                        <source src="../experiments/results_extended/tissue_simulation_nb_sweep_300x100/NB_5/videos/steps_100/mixture_nca_sample_149_nb_5.mp4" type="video/mp4">
+                    </video>
+                    <div class="video-label"><strong>NB=5</strong> - Mixture MNCA (Sample 149)</div>
+                </div>
+                <div class="video-item">
+                    <video controls loop muted>
+                        <source src="../experiments/results_extended/tissue_simulation_nb_sweep_300x100/NB_6/videos/steps_100/mixture_nca_sample_149_nb_6.mp4" type="video/mp4">
+                    </video>
+                    <div class="video-label"><strong>NB=6</strong> - Mixture MNCA (Sample 149)</div>
+                </div>
+                <div class="video-item">
+                    <video controls loop muted>
+                        <source src="../experiments/results_extended/tissue_simulation_nb_sweep_300x100/NB_7/videos/steps_100/mixture_nca_sample_149_nb_7.mp4" type="video/mp4">
+                    </video>
+                    <div class="video-label"><strong>NB=7</strong> - Mixture MNCA (Sample 149)</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SLIDE 19: Video Demo (Stochastic Mixture NCA) -->
+    <section class="slide">
+        <div class="slide-content">
+            <div class="section-number">03 - RESULTS</div>
+            <h2>Video Demo: Stochastic Mixture MNCA (NB=3..7)</h2>
+            <p>Same sample (149), stochastic rule selection, horizon 100 steps.</p>
+            <div class="video-grid" style="grid-template-columns: repeat(3, 1fr);">
+                <div class="video-item">
+                    <video controls loop muted>
+                        <source src="../experiments/results_extended/tissue_simulation_nb_sweep_300x100/NB_3/videos/steps_100/stochastic_nca_sample_149_nb_3.mp4" type="video/mp4">
+                    </video>
+                    <div class="video-label"><strong>NB=3</strong> - Stochastic Mixture MNCA (Sample 149)</div>
+                </div>
+                <div class="video-item">
+                    <video controls loop muted>
+                        <source src="../experiments/results_extended/tissue_simulation_nb_sweep_300x100/NB_4/videos/steps_100/stochastic_nca_sample_149_nb_4.mp4" type="video/mp4">
+                    </video>
+                    <div class="video-label"><strong>NB=4</strong> - Stochastic Mixture MNCA (Sample 149)</div>
+                </div>
+                <div class="video-item">
+                    <video controls loop muted>
+                        <source src="../experiments/results_extended/tissue_simulation_nb_sweep_300x100/NB_5/videos/steps_100/stochastic_nca_sample_149_nb_5.mp4" type="video/mp4">
+                    </video>
+                    <div class="video-label"><strong>NB=5</strong> - Stochastic Mixture MNCA (Sample 149)</div>
+                </div>
+                <div class="video-item">
+                    <video controls loop muted>
+                        <source src="../experiments/results_extended/tissue_simulation_nb_sweep_300x100/NB_6/videos/steps_100/stochastic_nca_sample_149_nb_6.mp4" type="video/mp4">
+                    </video>
+                    <div class="video-label"><strong>NB=6</strong> - Stochastic Mixture MNCA (Sample 149)</div>
+                </div>
+                <div class="video-item">
+                    <video controls loop muted>
+                        <source src="../experiments/results_extended/tissue_simulation_nb_sweep_300x100/NB_7/videos/steps_100/stochastic_nca_sample_149_nb_7.mp4" type="video/mp4">
+                    </video>
+                    <div class="video-label"><strong>NB=7</strong> - Stochastic Mixture MNCA (Sample 149)</div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SLIDE 20: Statistical Tests -->
+    <section class="slide">
+        <div class="slide-content">
+            <div class="section-number">03 - RESULTS</div>
+            <h2>Statistical Tests</h2>
+            <p>Non-parametric verification that observed differences are not explained by noise alone.</p>
+            <div class="highlight-box success">
+                <h4 style="color: #22c55e; margin-bottom: 1rem;">All comparisons NB>=2 vs NB=1 are significant (p < 10^-4)</h4>
+                <p style="margin-bottom: 0;">Global Kruskal-Wallis test + post-hoc Mann-Whitney U with Holm correction</p>
+            </div>
+            <table class="data-table" style="margin-top: 2rem;">
+                <thead>
+                    <tr>
+                        <th>Model</th>
+                        <th>Metric</th>
+                        <th>Kruskal-Wallis p</th>
+                        <th>Significant NB vs NB=1</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Mixture NCA</td>
+                        <td>KL Divergence</td>
+                        <td class="highlight-cell">&lt;10^-4</td>
+                        <td class="good-cell">2, 3, 4, 5, 6, 7</td>
+                    </tr>
+                    <tr>
+                        <td>Mixture NCA</td>
+                        <td>Tumor Size Diff</td>
+                        <td class="highlight-cell">&lt;10^-4</td>
+                        <td class="good-cell">2, 3, 4, 5, 6, 7</td>
+                    </tr>
+                    <tr>
+                        <td>Stochastic Mixture</td>
+                        <td>KL Divergence</td>
+                        <td class="highlight-cell">&lt;10^-4</td>
+                        <td class="good-cell">2, 3, 4, 5, 6, 7</td>
+                    </tr>
+                    <tr>
+                        <td>Stochastic Mixture</td>
+                        <td>Categorical MMD</td>
+                        <td class="highlight-cell">&lt;10^-4</td>
+                        <td class="good-cell">2, 3, 4, 5, 6</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </section>
+
+    <!-- SLIDE 21: Conclusions -->
+    <section class="slide" id="conclusions">
+        <div class="slide-content">
+            <div class="section-number">04 - CONCLUSIONS</div>
+            <h2>Main Conclusions</h2>
+            <div class="finding-item">
+                <div class="finding-number">1</div>
+                <div class="finding-content">
+                    <h4>Neighborhood Size Matters, But Mainly at the First Step</h4>
+                    <p>Going from NB=1 to NB>=2 produces a drastic improvement in stability and quality. The main "jump" happens at the first increment.</p>
+                </div>
+            </div>
+            <div class="finding-item">
+                <div class="finding-number">2</div>
+                <div class="finding-content">
+                    <h4>Non-Monotonic Effect of Neighborhood Size</h4>
+                    <p>For NB>=2, performance does not improve monotonically. There is a trade-off between distributional agreement and spatial fidelity that depends on the metric and rollout horizon.</p>
+                </div>
+            </div>
+            <div class="finding-item">
+                <div class="finding-number">3</div>
+                <div class="finding-content">
+                    <h4>Evaluation Protocol is Critical</h4>
+                    <p>Differences between neighborhood sizes are easier to interpret when training and evaluation are consistent and when models are evaluated at multiple time horizons.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SLIDE 22: Takeaway -->
+    <section class="slide">
+        <div class="slide-content" style="text-align: center;">
+            <div class="section-number">04 - CONCLUSIONS</div>
+            <h2>Main Takeaway</h2>
+            <div class="highlight-box" style="max-width: 900px; margin: 2rem auto; padding: 3rem;">
+                <p style="font-size: 1.3rem; max-width: none; margin-bottom: 0; line-height: 1.8;">
+                    <strong>MNCAs can model tissue-like dynamics</strong> in a controlled synthetic setting, but <strong>careful experimental design</strong> is required to obtain interpretable conclusions.
+                </p>
+            </div>
+            <div class="cards-grid" style="max-width: 1000px; margin: 2rem auto;">
+                <div class="card">
+                    <div class="card-icon">+</div>
+                    <h4>What Works</h4>
+                    <p>NB>=2 is essential. Computational cost remains contained. The effect is statistically significant.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon">!</div>
+                    <h4>What Requires Attention</h4>
+                    <p>Choice of evaluation horizon, consistency between training and test, control of confounding factors.</p>
+                </div>
+                <div class="card">
+                    <div class="card-icon">N</div>
+                    <h4>Next Steps</h4>
+                    <p>Validation on real biological datasets, extension of curriculum learning with lessons learned.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- SLIDE 23: Thank You -->
+    <section class="slide title-slide">
+        <div class="slide-content">
+            <h1>Thank you for your attention</h1>
+            <p class="subtitle questions-centered">Questions?</p>
+            <img class="logo-bicocca" src="../thesis-latex/logos/logo-unimib.png" alt="University of Milano-Bicocca logo">
+            <div class="meta" style="margin-top: 3rem;">
+                <span>Luigi Daddario</span>
+                <span>-</span>
+                <span>AI4ST Thesis Research</span>
+            </div>
+        </div>
+    </section>
+
+    <div class="keyboard-hint">
+        <kbd>up</kbd><kbd>down</kbd> Navigate slides
+    </div>
+
+    <script>
+        // Update progress bar and slide counter
+        const slides = document.querySelectorAll('.slide');
+        const progressBar = document.getElementById('progressBar');
+        const slideCounter = document.getElementById('slideCounter');
+        
+        function updateProgress() {
+            const scrollTop = window.pageYOffset;
+            const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+            const progress = (scrollTop / docHeight) * 100;
+            progressBar.style.width = progress + '%';
+            
+            // Update slide counter
+            let currentSlide = 1;
+            slides.forEach((slide, index) => {
+                const rect = slide.getBoundingClientRect();
+                if (rect.top <= window.innerHeight / 2) {
+                    currentSlide = index + 1;
+                }
+            });
+            slideCounter.textContent = `${currentSlide} / ${slides.length}`;
+        }
+        
+        window.addEventListener('scroll', updateProgress);
+        updateProgress();
+
+        // Keyboard navigation
+        document.addEventListener('keydown', (e) => {
+            const currentScroll = window.pageYOffset;
+            let targetSlide = null;
+            
+            if (e.key === 'ArrowDown' || e.key === 'PageDown' || e.key === ' ') {
+                e.preventDefault();
+                slides.forEach((slide, index) => {
+                    if (!targetSlide && slide.offsetTop > currentScroll + 50) {
+                        targetSlide = slide;
+                    }
+                });
+            } else if (e.key === 'ArrowUp' || e.key === 'PageUp') {
+                e.preventDefault();
+                for (let i = slides.length - 1; i >= 0; i--) {
+                    if (slides[i].offsetTop < currentScroll - 50) {
+                        targetSlide = slides[i];
+                        break;
+                    }
+                }
+            }
+            
+            if (targetSlide) {
+                targetSlide.scrollIntoView({ behavior: 'smooth' });
+            }
+        });
+
+        // Intersection Observer for animations
+        const observerOptions = {
+            threshold: 0.1,
+            rootMargin: '0px 0px -10% 0px'
+        };
+
+        const observer = new IntersectionObserver((entries) => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    entry.target.querySelectorAll('.animate-in').forEach(el => {
+                        el.style.opacity = '1';
+                    });
+                }
+            });
+        }, observerOptions);
+
+        slides.forEach(slide => observer.observe(slide));
+
+        // Same-init comparison selector
+        (function () {
+            const modelSel = document.getElementById('sameInitModel');
+            const nbSel = document.getElementById('sameInitNb');
+            const img = document.getElementById('sameInitModelImg');
+            const cap = document.getElementById('sameInitCaption');
+            if (!modelSel || !nbSel || !img || !cap) return;
+
+            function label(modelKey) {
+                return modelKey === 'stochastic' ? 'Stochastic Mixture MNCA' : 'Mixture MNCA';
+            }
+
+            function update() {
+                const modelKey = modelSel.value;
+                const nb = nbSel.value;
+                img.src = `assets/same_init/sample_149/${modelKey}_nb_${nb}.png`;
+                cap.textContent = `${label(modelKey)} — NB=${nb} — rollout from same x0`;
+            }
+
+            modelSel.addEventListener('change', update);
+            nbSel.addEventListener('change', update);
+            update();
+        })();
+    </script>
+</body>
+</html>

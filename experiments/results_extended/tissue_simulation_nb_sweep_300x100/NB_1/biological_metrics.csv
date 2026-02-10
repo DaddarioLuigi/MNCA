@@ -1,0 +1,7 @@
+Model Type,Step Length,KL Divergence,KL Divergence SD,Chi-Square,Chi-Square SD,Categorical MMD,Categorical MMD SD,Tumor Size Diff,Tumor Size Diff SD,Border Size Diff,Border Size Diff SD,Spatial Variance Diff,Spatial Variance Diff SD,Neighborhood Size
+Mixture NCA,25,9.632,±0.038,1.410,±0.014,0.251,±0.000,0.937,±0.000,0.703,±0.003,0.779,±0.022,1
+Mixture NCA,50,9.611,±0.018,1.402,±0.007,0.251,±0.000,0.937,±0.000,0.701,±0.002,0.761,±0.004,1
+Mixture NCA,100,9.633,±0.019,1.411,±0.007,0.251,±0.000,0.937,±0.000,0.702,±0.002,0.772,±0.016,1
+Stochastic Mixture NCA,25,14.475,±0.000,1.539,±0.000,0.252,±0.000,0.939,±0.000,0.728,±0.000,0.928,±0.000,1
+Stochastic Mixture NCA,50,14.475,±0.000,1.539,±0.000,0.252,±0.000,0.939,±0.000,0.728,±0.000,0.928,±0.000,1
+Stochastic Mixture NCA,100,14.475,±0.000,1.539,±0.000,0.252,±0.000,0.939,±0.000,0.728,±0.000,0.928,±0.000,1

@@ -1210,6 +1210,299 @@ class NeighborhoodSizeAnalyzer:
         print(f"Saved: {filename}")
         
         print(f"\nAll visualizations saved to {output_dir}")
+
+    # -------------------------------------------------------------------------
+    # Per-simulation analysis utilities (violin-style diagnostics + failure rates)
+    # -------------------------------------------------------------------------
+
+    def load_per_simulation_metrics(
+        self,
+        neighborhood_sizes: List[int] = [1, 2, 3, 4, 5, 6, 7],
+        filename: str = "raw_metrics_per_simulation.csv",
+    ) -> pd.DataFrame:
+        """
+        Load per-simulation metrics (one row per simulation/history) from NB_* folders.
+
+        Expected columns (from _evaluate_with_raw_data):
+          - Model Type, Neighborhood Size, Step Length, Evaluation, Simulation
+          - KL Divergence, Chi-Square, Categorical MMD,
+            Tumor Size Diff, Border Size Diff, Spatial Variance Diff
+        """
+        frames: List[pd.DataFrame] = []
+        for nb_size in neighborhood_sizes:
+            exp_dir = self.base_dir / f"NB_{nb_size}"
+            p = exp_dir / filename
+            if not p.exists():
+                # Backwards compatibility: user may have only the pickle
+                continue
+            df = pd.read_csv(p)
+            # Ensure consistent NB (trust folder name)
+            df["Neighborhood Size"] = int(nb_size)
+            frames.append(df)
+
+        if not frames:
+            raise FileNotFoundError(
+                f"No per-simulation CSVs found in NB_* folders under {self.base_dir}. "
+                f"Expected '{filename}' inside each NB_k folder."
+            )
+
+        out = pd.concat(frames, ignore_index=True)
+
+        # Normalize dtypes for grouping
+        for col in ["Neighborhood Size", "Step Length", "Evaluation", "Simulation"]:
+            if col in out.columns:
+                out[col] = pd.to_numeric(out[col], errors="coerce")
+        out = out.dropna(subset=["Model Type", "Neighborhood Size", "Step Length", "Evaluation", "Simulation"])
+        out["Neighborhood Size"] = out["Neighborhood Size"].astype(int)
+        out["Step Length"] = out["Step Length"].astype(int)
+        out["Evaluation"] = out["Evaluation"].astype(int)
+        out["Simulation"] = out["Simulation"].astype(int)
+
+        # Coerce metric columns to numeric where present
+        metric_cols = [
+            "KL Divergence",
+            "Chi-Square",
+            "Categorical MMD",
+            "Tumor Size Diff",
+            "Border Size Diff",
+            "Spatial Variance Diff",
+        ]
+        for m in metric_cols:
+            if m in out.columns:
+                out[m] = pd.to_numeric(out[m], errors="coerce")
+
+        return out
+
+    def compute_distribution_diagnostics(self, per_sim_df: pd.DataFrame) -> pd.DataFrame:
+        """
+        Compute robust diagnostics that correspond to what you see in violin plots.
+
+        For each (Model Type, Step Length, Neighborhood Size, Metric):
+          - median, q1, q3, p5, p95, IQR
+          - tukey_outlier_rate: fraction outside [q1 - 1.5*IQR, q3 + 1.5*IQR]
+        """
+        metric_cols = [
+            "KL Divergence",
+            "Chi-Square",
+            "Categorical MMD",
+            "Tumor Size Diff",
+            "Border Size Diff",
+            "Spatial Variance Diff",
+        ]
+        available = [m for m in metric_cols if m in per_sim_df.columns]
+        rows: List[Dict[str, object]] = []
+
+        for (model, step, nb), g in per_sim_df.groupby(["Model Type", "Step Length", "Neighborhood Size"]):
+            for metric in available:
+                x = pd.to_numeric(g[metric], errors="coerce").dropna().to_numpy(dtype=float)
+                if x.size == 0:
+                    continue
+                q1, med, q3 = np.quantile(x, [0.25, 0.5, 0.75])
+                p5, p95 = np.quantile(x, [0.05, 0.95])
+                iqr = float(q3 - q1)
+                lo = float(q1 - 1.5 * iqr)
+                hi = float(q3 + 1.5 * iqr)
+                tuk = float(((x < lo) | (x > hi)).mean())
+                rows.append(
+                    {
+                        "Model Type": model,
+                        "Step Length": int(step),
+                        "Neighborhood Size": int(nb),
+                        "Metric": metric,
+                        "n": int(x.size),
+                        "median": float(med),
+                        "q1": float(q1),
+                        "q3": float(q3),
+                        "p5": float(p5),
+                        "p95": float(p95),
+                        "iqr": float(iqr),
+                        "tukey_outlier_rate": tuk,
+                    }
+                )
+
+        return pd.DataFrame(rows)
+
+    def compute_bad_rate_vs_best(
+        self,
+        per_sim_df: pd.DataFrame,
+        best_quantile: float = 0.95,
+    ) -> pd.DataFrame:
+        """
+        Compute a 'failure probability' proxy from per-simulation distributions.
+
+        For each (Model Type, Step Length, Metric):
+          1) Choose Best NB as the one with the smallest median (per-simulation)
+          2) Define threshold T as Q_best_quantile of the Best-NB distribution
+          3) For each NB compute bad_rate = P(metric > T)
+
+        This turns "a non-trivial fraction of runs explodes" into a number.
+        """
+        if not (0.5 < float(best_quantile) < 1.0):
+            raise ValueError("best_quantile must be in (0.5, 1.0)")
+
+        metric_cols = [
+            "KL Divergence",
+            "Chi-Square",
+            "Categorical MMD",
+            "Tumor Size Diff",
+            "Border Size Diff",
+            "Spatial Variance Diff",
+        ]
+        available = [m for m in metric_cols if m in per_sim_df.columns]
+        rows: List[Dict[str, object]] = []
+
+        for (model, step), g_ms in per_sim_df.groupby(["Model Type", "Step Length"]):
+            for metric in available:
+                medians = g_ms.groupby("Neighborhood Size")[metric].median().sort_values(ascending=True)
+                if medians.empty:
+                    continue
+                best_nb = int(medians.index[0])
+                x_best = pd.to_numeric(
+                    g_ms[g_ms["Neighborhood Size"] == best_nb][metric], errors="coerce"
+                ).dropna().to_numpy(dtype=float)
+                if x_best.size == 0:
+                    continue
+                thr = float(np.quantile(x_best, best_quantile))
+
+                for nb, g_nb in g_ms.groupby("Neighborhood Size"):
+                    x = pd.to_numeric(g_nb[metric], errors="coerce").dropna().to_numpy(dtype=float)
+                    if x.size == 0:
+                        continue
+                    bad_rate = float((x > thr).mean())
+                    rows.append(
+                        {
+                            "Model Type": model,
+                            "Step Length": int(step),
+                            "Metric": metric,
+                            "Best NB (by median)": best_nb,
+                            "Best threshold quantile": float(best_quantile),
+                            "Threshold (from best NB)": thr,
+                            "Neighborhood Size": int(nb),
+                            "bad_rate": bad_rate,
+                            "n": int(x.size),
+                        }
+                    )
+
+        return pd.DataFrame(rows)
+
+    def per_simulation_failure_analysis(
+        self,
+        neighborhood_sizes: List[int] = [1, 2, 3, 4, 5, 6, 7],
+        best_quantile: float = 0.95,
+        output_dir: Optional[str] = None,
+        generate_violin_plots: bool = True,
+    ) -> Tuple[pd.DataFrame, pd.DataFrame]:
+        """
+        End-to-end per-simulation analysis:
+          - load per-simulation metrics
+          - compute distribution diagnostics + bad-rate vs best threshold
+          - save CSVs and Plotly plots under output_dir
+        """
+        if output_dir is None:
+            out_dir = self.base_dir / "analysis_plots"
+        else:
+            out_dir = Path(output_dir)
+        out_dir.mkdir(parents=True, exist_ok=True)
+
+        per_sim_df = self.load_per_simulation_metrics(neighborhood_sizes=neighborhood_sizes)
+        diag_df = self.compute_distribution_diagnostics(per_sim_df)
+        bad_df = self.compute_bad_rate_vs_best(per_sim_df, best_quantile=best_quantile)
+
+        diag_csv = out_dir / "distribution_diagnostics.csv"
+        bad_csv = out_dir / f"bad_rate_vs_best_q{int(best_quantile * 100)}.csv"
+        diag_df.to_csv(diag_csv, index=False)
+        bad_df.to_csv(bad_csv, index=False)
+
+        metric_cols = [
+            "KL Divergence",
+            "Chi-Square",
+            "Categorical MMD",
+            "Tumor Size Diff",
+            "Border Size Diff",
+            "Spatial Variance Diff",
+        ]
+        available = [m for m in metric_cols if m in per_sim_df.columns]
+
+        # Violin plots (per-simulation distributions)
+        if generate_violin_plots:
+            for metric in available:
+                fig = px.violin(
+                    per_sim_df,
+                    x="Neighborhood Size",
+                    y=metric,
+                    color="Model Type",
+                    facet_col="Step Length",
+                    box=True,
+                    points="outliers",
+                    category_orders={"Neighborhood Size": sorted(per_sim_df["Neighborhood Size"].unique())},
+                    title=f"{metric} — per-simulation distributions (faceted by Step Length)",
+                    template="plotly_white",
+                )
+                fig.update_layout(width=1400, height=600, legend_title_text="Model Type")
+                fig.update_xaxes(title_text="Neighborhood Size")
+                fig.write_html(str(out_dir / f"{metric.replace(' ', '_').replace('-', '').lower()}__violin_per_sim.html"))
+
+        # Bad-rate plots
+        for metric in available:
+            d = bad_df[bad_df["Metric"] == metric].copy()
+            if d.empty:
+                continue
+
+            # Bars
+            fig_bar = px.bar(
+                d,
+                x="Neighborhood Size",
+                y="bad_rate",
+                color="Model Type",
+                facet_col="Step Length",
+                barmode="group",
+                category_orders={"Neighborhood Size": sorted(d["Neighborhood Size"].unique())},
+                title=f"{metric} — bad-rate P(metric > Q{int(best_quantile*100)}(best NB))",
+                template="plotly_white",
+            )
+            fig_bar.update_layout(width=1400, height=600)
+            fig_bar.update_yaxes(tickformat=".0%")
+            fig_bar.write_html(str(out_dir / f"{metric.replace(' ', '_').replace('-', '').lower()}__bad_rate_bars.html"))
+
+            # Heatmap: NB x Step, one panel per model
+            models = list(d["Model Type"].unique())
+            steps = sorted(d["Step Length"].unique())
+            nbs = sorted(d["Neighborhood Size"].unique())
+            fig_hm = make_subplots(
+                rows=1,
+                cols=len(models),
+                subplot_titles=[f"{m}" for m in models],
+                horizontal_spacing=0.10,
+            )
+            for col_i, model in enumerate(models, start=1):
+                dm = d[d["Model Type"] == model]
+                pivot = dm.pivot_table(index="Step Length", columns="Neighborhood Size", values="bad_rate", aggfunc="mean")
+                pivot = pivot.reindex(index=steps, columns=nbs)
+                fig_hm.add_trace(
+                    go.Heatmap(
+                        z=pivot.values,
+                        x=[f"NB={nb}" for nb in nbs],
+                        y=[f"steps={s}" for s in steps],
+                        coloraxis="coloraxis",
+                        hovertemplate="NB=%{x}<br>%{y}<br>bad_rate=%{z:.1%}<extra></extra>",
+                    ),
+                    row=1,
+                    col=col_i,
+                )
+            fig_hm.update_layout(
+                title=f"{metric} — bad-rate vs best-NB threshold (q={best_quantile:.2f})",
+                width=1400,
+                height=520,
+                template="plotly_white",
+                coloraxis=dict(colorscale="Reds", cmin=0.0, cmax=1.0),
+            )
+            fig_hm.write_html(str(out_dir / f"{metric.replace(' ', '_').replace('-', '').lower()}__bad_rate_heatmap.html"))
+
+        print(f"\nSaved per-simulation diagnostics to: {diag_csv}")
+        print(f"Saved bad-rate table to: {bad_csv}")
+        print(f"Saved per-simulation plots to: {out_dir}")
+
+        return diag_df, bad_df
     
     def _calculate_effect_size_mannwhitney(self, data1: np.ndarray, data2: np.ndarray, 
                                             u_stat: float) -> float:
@@ -1583,6 +1876,12 @@ def main():
                        help='Stride over time steps (e.g., 5 = every 5 steps)')
     parser.add_argument('--rule_entropy_max_t', type=int, default=0,
                        help='Max number of time steps to consider (0 = use full common horizon)')
+    parser.add_argument('--per_simulation_failure', action='store_true',
+                       help='Compute per-simulation diagnostics + bad-rate plots (requires NB_*/raw_metrics_per_simulation.csv)')
+    parser.add_argument('--per_simulation_best_q', type=float, default=0.95,
+                       help='Quantile for bad-rate threshold from best NB (default: 0.95)')
+    parser.add_argument('--per_simulation_no_violins', action='store_true',
+                       help='Skip generating per-simulation violin plots (only diagnostics + bad-rate plots)')
     
     args = parser.parse_args()
     
@@ -1633,6 +1932,14 @@ def main():
             n_samples=int(args.rule_entropy_n_samples),
             time_stride=int(args.rule_entropy_stride),
             max_time_steps=max_t,
+        )
+
+    # Per-simulation failure analysis (violin diagnostics + bad-rate)
+    if args.per_simulation_failure:
+        analyzer.per_simulation_failure_analysis(
+            neighborhood_sizes=neighborhood_sizes,
+            best_quantile=float(args.per_simulation_best_q),
+            generate_violin_plots=(not args.per_simulation_no_violins),
         )
     
     

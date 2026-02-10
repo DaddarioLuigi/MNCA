@@ -9,6 +9,49 @@
 
 \epigraph{\enquote{A design of any kind shows its real value when taking beyond its original limits.}}{\emph{Tom Jennings}}
 
+% -------------------------------------------------------------------
+% Thesis-specific draft (work in progress).
+% NOTE: the original template text below is kept (not deleted) and can be
+% removed once the thesis text is finalized.
+% -------------------------------------------------------------------
+
+%-------------------------------------------------------------------
+\section{Context and motivation}
+\label{sec:intro:context}
+%-------------------------------------------------------------------
+
+This thesis studies computational models that can simulate \emph{tissue-like growth} and organization.
+The general biological motivation is that tissues emerge from many local interactions: cells divide, differentiate, die, and respond to signals coming from their spatial neighborhood.
+Even when the underlying biology is complex, it is often useful to study simplified models that capture the key idea of \emph{local rules leading to global structure}.
+
+In this introduction, we will add more biological context (e.g., regeneration and pattern formation), and we will motivate why learning-based cellular models are interesting for biology.
+We will also discuss why long-horizon behavior matters: a model should not only match short-term transitions, but also remain stable when it is run freely for many steps.
+
+%-------------------------------------------------------------------
+\section{Why cellular automata and neural cellular automata}
+\label{sec:intro:why_ca}
+%-------------------------------------------------------------------
+
+Cellular Automata (CA) are one of the simplest ways to model complex spatial phenomena: a grid of cells, updated by local rules.
+Neural Cellular Automata (NCA) extend this idea by learning the update rule from data, and mixture-based variants introduce multiple rules and stochasticity, which can be useful when modeling biological variability.
+
+A key design choice in these models is the \emph{spatial neighborhood size} (\(NB\)): how far a cell can ``see'' when it updates.
+A larger neighborhood can provide more context and potentially improve stability, but it may also change the inductive bias and increase complexity.
+This motivates our main question: does increasing \(NB\) help MNCA learn better tissue dynamics?
+
+%-------------------------------------------------------------------
+\section{Thesis objectives and contributions}
+\label{sec:intro:objectives}
+%-------------------------------------------------------------------
+
+The core objective of this thesis is to evaluate Mixture Neural Cellular Automata (MNCA) in a tissue-growth setting and to understand whether extending the neighborhood is beneficial.
+To do this, we design a set of experiments that progressively improve the training signal and the evaluation protocol, and we report results across multiple neighborhood sizes using both qualitative rollouts and quantitative metrics.
+
+%-------------------------------------------------------------------
+\section{Template notes (kept from the original \LaTeX\ template)}
+\label{sec:intro:template_notes}
+%-------------------------------------------------------------------
+
 Some few conventions (and an example of nested item list):
 
 \begin{itemize}

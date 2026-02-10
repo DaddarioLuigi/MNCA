@@ -6,3 +6,41 @@
 \epigraph{\enquote{I believe that inside every tool is a hammer.}}{\emph{Adam Savage}}
 
 This chapter describes the tools and frameworks used in the thesis.
+
+%----------------------------------------------------------
+\section{Software stack}
+%----------------------------------------------------------
+
+The experiments in this thesis are implemented in Python.
+Most model components are implemented with \texttt{PyTorch}, while data manipulation and analysis use standard scientific libraries (e.g., \texttt{NumPy}, \texttt{pandas}, \texttt{matplotlib}).
+Interactive exploration and plotting were done in an interactive environment, while long experiment runs were executed via reproducible command-line pipelines.
+
+\paragraph{Reproducibility and artifacts.}
+To make experiments easier to reproduce and inspect, the pipeline saves:
+(i) trained model checkpoints (e.g., \texttt{.pt} files),
+(ii) datasets as serialized arrays (for reproducibility),
+(iii) per-configuration metrics as \texttt{.csv},
+and (iv) plots and dashboards as static images or \texttt{.html} reports.
+
+%----------------------------------------------------------
+\section{Code organization}
+%----------------------------------------------------------
+
+The repository is organized around a few core components:
+
+\begin{itemize}
+\item \textbf{Models:} implementations of NCA and mixture-based extensions are in \texttt{mix\_NCA/}.
+\item \textbf{Synthetic biological simulator:} a biologically-inspired toy simulator is used to generate supervised tissue-growth trajectories.
+\item \textbf{Experiment pipeline:} automated training/evaluation sweeps with standardized outputs (checkpoints, metrics, plots).
+\item \textbf{Analysis pipeline:} aggregation and visualization code that produces the final dashboards used in the thesis.
+\end{itemize}
+
+In particular, the neighborhood-size sweep discussed in \cref{c:implementation} uses a pre-generated dataset of simulated histories plus the metrics and checkpoints produced by the sweep runs.
+
+%----------------------------------------------------------
+\section{Compute and execution}
+%----------------------------------------------------------
+
+Training is GPU-friendly but not strictly required: the code can fall back to CPU execution.
+Where available, the implementation supports selecting the best backend automatically (CUDA, Apple MPS, or CPU).
+For longer training horizons (hundreds of rollout steps), computational cost is mainly dominated by repeated unrolls of the learned dynamics, so experiment design (dataset size, rollout horizon, and curriculum schedules) plays an important role in iteration speed.
