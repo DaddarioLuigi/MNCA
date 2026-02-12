@@ -726,8 +726,8 @@ if __name__ == "__main__":
                         help='Enable curriculum learning over multiple time_length phases')
     parser.add_argument('--curriculum_time_lengths', type=str, default='35,100,500',
                         help='Comma-separated list of time_length values for curriculum phases (default: 35,100,500)')
-    parser.add_argument('--curriculum_epochs', type=str, default='300,150,20',
-                        help='Comma-separated list of n_epochs per curriculum phase (default: 300,150,20)')
+    parser.add_argument('--curriculum_epochs', type=str, default='250,150,60',
+                        help='Comma-separated list of n_epochs per curriculum phase (default: 250,150,60)')
     parser.add_argument('--curriculum_lrs', type=str, default='0.001,0.0005,0.0001',
                         help='Comma-separated list of learning rates per curriculum phase (default: 0.001,0.0005,0.0001)')
     parser.add_argument('--curriculum_update_every', type=str, default='1,1,2',
