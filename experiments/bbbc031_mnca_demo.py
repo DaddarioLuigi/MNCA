@@ -20,7 +20,10 @@ import argparse
 import sys
 from pathlib import Path
 
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+import matplotlib.animation as animation
 import numpy as np
 import pandas as pd
 import torch
@@ -160,6 +163,17 @@ def main() -> None:
         action="store_true",
         help="Carica checkpoint Stochastic Mixture (ExtendedMixtureNCANoise).",
     )
+    parser.add_argument(
+        "--save_video",
+        action="store_true",
+        help="Salva un video dell'evoluzione NCA (richiede checkpoint).",
+    )
+    parser.add_argument(
+        "--video_path",
+        type=Path,
+        default=None,
+        help="Path di output per il video (default: out_dir/bbbc031_evolution_NB{nb}.mp4).",
+    )
     args = parser.parse_args()
 
     device = torch.device(args.device)
@@ -268,18 +282,23 @@ def main() -> None:
     init_state = build_init_state(
         device, N_CHANNELS, args.target_size, args.target_size, seed_y, seed_x
     )
+    need_history = args.save_video
     with torch.no_grad():
-        # forward restituisce (num_steps, B, C, H, W) se return_history=True
         out = model(
             init_state,
             args.num_steps,
             seed_loc=(seed_y, seed_x),
-            return_history=False,
+            return_history=need_history,
             sample_non_differentiable=True,
             straight_through=True,
         )
-    # out: (B, C, H, W)
-    pred_rgba = out[:, :4].clamp(0, 1)
+    if need_history:
+        # out: (T+1, B, C, H, W)
+        history = out
+        pred_rgba = history[-1, :, :4].clamp(0, 1)
+    else:
+        # out: (B, C, H, W)
+        pred_rgba = out[:, :4].clamp(0, 1)
     pred_np = rgba_to_display(pred_rgba)
 
     # Figura 2: Target vs Predizione
@@ -298,6 +317,42 @@ def main() -> None:
     fig.savefig(args.out_dir / out_name, dpi=150, bbox_inches="tight")
     plt.close(fig)
     print("Salvato:", out_name)
+
+    if args.save_video and need_history:
+        video_path = args.video_path or (
+            args.out_dir / f"bbbc031_evolution_NB{args.neighborhood_size}.mp4"
+        )
+        video_path = Path(video_path)
+        video_path.parent.mkdir(parents=True, exist_ok=True)
+        frame_images = [
+            rgba_to_display(history[t, 0, :4].clamp(0, 1))
+            for t in range(history.shape[0])
+        ]
+        fig_v, ax_v = plt.subplots(figsize=(5, 5))
+        ax_v.axis("off")
+        im = ax_v.imshow(frame_images[0])
+        ax_v.set_title(f"Step 0/{len(frame_images) - 1}")
+
+        def _update(t):
+            im.set_array(frame_images[min(t, len(frame_images) - 1)])
+            ax_v.set_title(f"Step {min(t, len(frame_images) - 1)}/{len(frame_images) - 1}")
+            return [im]
+
+        anim = animation.FuncAnimation(
+            fig_v, _update, frames=len(frame_images), interval=80, blit=True, repeat=True
+        )
+        try:
+            anim.save(str(video_path), writer="ffmpeg", fps=12, bitrate=1800)
+            print("Video salvato:", video_path)
+        except Exception as e:
+            gif_path = video_path.with_suffix(".gif")
+            try:
+                anim.save(str(gif_path), writer="pillow", fps=12)
+                print("Video non disponibile (ffmpeg?), salvato GIF:", gif_path)
+            except Exception as e2:
+                print("Errore salvataggio video/GIF:", e, e2)
+        plt.close(fig_v)
+
     print("Fatto. Output in", args.out_dir)
 
 
