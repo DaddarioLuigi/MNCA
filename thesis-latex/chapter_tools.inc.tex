@@ -112,14 +112,14 @@ After training, the script evaluates each model at several rollout lengths (e.g.
   \centering
   \caption{Main command-line arguments of the experiment script.}
   \label{tab:tools:expargs}
-  \begin{tabular}{@{}lp{3.1cm}p{6.4cm}@{}}
+  \begin{tabular}{@{}lp{4.2cm}p{5.8cm}@{}}
       \hline
       \textbf{Argument} & \textbf{Default} & \textbf{Description} \\
       \hline
       \texttt{--histories\_path} & \texttt{../notebooks/histories.npy} & Path to histories file (\texttt{.npy}) \\
       \texttt{--output\_dir} & \texttt{results\_extended} & Root directory for all outputs \\
       \texttt{--neighborhood\_sizes} & \texttt{3,4,5,6,7} & Comma-separated list of sizes \\
-      \texttt{--curriculum} & off & Enable curriculum learning \\
+      \texttt{--curriculum} & \texttt{off} & Enable curriculum learning \\
       \texttt{--curriculum\_time\_lengths} & \texttt{35,100,500} & Time lengths per phase \\
       \texttt{--curriculum\_epochs} & \texttt{250,150,60} & Epochs per phase \\
       \texttt{--step\_lengths} & \texttt{25,100,500} & Rollout lengths for evaluation \\
@@ -161,11 +161,11 @@ Reproducibility is supported at three levels (\Cref{tab:tools:repro}).
   \centering
   \caption{Reproducibility mechanisms.}
   \label{tab:tools:repro}
-  \begin{tabular}{@{}p{1.8cm}p{10.2cm}@{}}
+  \begin{tabular}{@{}p{2.4cm}p{9.6cm}@{}}
     \hline
     \textbf{Level} & \textbf{Mechanism} \\
     \hline
-    Data & Histories file is a serialised NumPy array; it can be regenerated with the data-generation script using the same \texttt{--n\_simulations}, \texttt{--n\_steps}, and \texttt{--seed}. \\
+    Data & Histories file is a serialised NumPy array; it can be re-generated with the data-generation script using the same \texttt{--n\_simulations}, \texttt{--n\_steps}, and \texttt{--seed}. \\
     \hline
     Randomness & The experiment script accepts \texttt{--seed}; when set, NumPy and PyTorch seeds are fixed at the start of the run. The seed and the absolute path to the histories file are stored in \texttt{summary.json}. \\
     \hline

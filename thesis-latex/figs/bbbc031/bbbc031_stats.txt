@@ -1,6 +1,0 @@
-n_images: 216
-n_cells: 8640
-cells_per_image_mean: 40.0
-cells_per_image_median: 40.0
-cells_per_image_min: 40
-cells_per_image_max: 40

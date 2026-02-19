@@ -42,7 +42,11 @@ In the ``complex'' configuration used for most experiments, the simulator includ
 
 \paragraph{Local update rules (biological intuition).}
 At each simulation step, each occupied cell can:
-(i) die, (ii) survive, or (iii) divide into a nearby empty site.
+\begin{itemize}
+  \item die,
+  \item survive, or
+  \item divide into a nearby empty site.
+\end{itemize}
 When a division happens, the newly created cell may \emph{differentiate} according to a probability table that depends on the parent cell type and (optionally) on neighbor context.
 This yields trajectories that show growth, spatial organization, and gradual maturation into differentiated compartments.
 
@@ -144,11 +148,19 @@ Our first goal was not to change the learning procedure itself, but to isolate t
 In principle, increasing NB should allow the update rule to condition on a broader spatial context, which could improve regeneration and pattern stability.
 
 In practice, this ``paper-like'' regime did not produce a clean answer to the neighborhood question.
-Across several NB values, the qualitative rollouts remained inconsistent and the quantitative differences were small, making it hard to tell whether (i) NB genuinely had little impact, or (ii) the training signal was simply too weak/noisy in this low-data, short-horizon setting.
+Across several NB values, the qualitative rollouts remained inconsistent and the quantitative differences were small, making it hard to tell whether:
+\begin{itemize}
+  \item NB genuinely had little impact, or
+  \item the training signal was simply too weak/noisy in this low-data, short-horizon setting.
+\end{itemize}
 At that point, we were not confident that a negative result would be meaningful.
 
 Following this, we attempted to strengthen the supervision by increasing both dataset size and sequence length, moving to \textbf{1000 trajectories of 500 time steps} each.
-The motivation was twofold: (1) more trajectories reduce variance and improve coverage of initial conditions, and (2) longer sequences better represent the long-horizon behavior we ultimately care about when judging whether a model ``regenerates'' rather than just matching short-term transitions.
+The motivation was twofold:
+\begin{itemize}
+  \item more trajectories reduce variance and improve coverage of initial conditions;
+  \item longer sequences better represent the long-horizon behavior we ultimately care about when judging whether a model ``regenerates'' rather than just matching short-term transitions.
+\end{itemize}
 However, training directly on long sequences at this scale was computationally heavy and slowed iteration substantially.
 
 To make long-horizon training feasible, we introduced \textbf{curriculum learning}, training on progressively longer temporal windows (e.g., a first phase with a \textbf{35-step} window, then \textbf{100-step}, and finally \textbf{500-step}, with fewer epochs and smaller learning rates in later phases).
@@ -316,9 +328,11 @@ Low entropy indicates confident (specialized) rule selection, while higher entro
 
 \paragraph{Rule specialization summary and interpretation.}
 To complement the time-series view, we also summarize rule specialization with three simple indicators:
-(i) mean entropy (lower means more confident selection),
-(ii) rule diversity (higher means probability mass is spread over more rules),
-and (iii) max rule usage (the maximum average probability assigned to a single rule; lower means more balanced usage).
+\begin{itemize}
+  \item mean entropy (lower means more confident selection),
+  \item rule diversity (higher means probability mass is spread over more rules),
+  \item max rule usage (the maximum average probability assigned to a single rule; lower means more balanced usage).
+\end{itemize}
 Figure~\ref{fig:impl:step3:rule:summary} reports these indicators and relates them to KL divergence at Step Length \(=100\).
 In our sweep, lower mean entropy at long horizons tends to correlate with better (lower) KL divergence: configurations that commit more confidently to specific rules often achieve a closer match to the ground-truth distribution.
 The relation is not strict---other factors such as the choice of \(NB\) and the evaluation horizon also matter---but it supports the interpretation that stable, specialized rule selection contributes to distributional fidelity when the model is run in free-rollout mode.
