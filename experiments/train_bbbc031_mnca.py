@@ -256,9 +256,8 @@ def main() -> None:
 
     print("Config:", model_label, ", neighborhood_size =", args.neighborhood_size)
     print("Inizio training su immagine:", args.example_image, f"({args.total_steps} step)")
-    # total_steps+1 perché train_nca fa range(total_steps+1) iterazioni
     pbar = tqdm(
-        total=args.total_steps + 1,
+        total=args.total_steps,
         unit=" step",
         desc="Training",
         bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}] loss={postfix}",

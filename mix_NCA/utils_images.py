@@ -49,7 +49,7 @@ def train_nca(model, data, device = "cuda", num_steps = (10,20), learning_rate=1
   pool = init_state[:1].repeat(pool_size,1,1,1).cpu()
   
   results = {'loss':[], 'tprev': [time.time()]}
-  for step in range(total_steps+1):
+  for step in range(total_steps):
 
     # prepare batch and run forward pass
     if pool_size > 0:  # draw CAs from pool (if we have one)
