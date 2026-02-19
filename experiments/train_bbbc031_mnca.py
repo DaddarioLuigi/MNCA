@@ -256,11 +256,19 @@ def main() -> None:
 
     print("Config:", model_label, ", neighborhood_size =", args.neighborhood_size)
     print("Inizio training su immagine:", args.example_image, f"({args.total_steps} step)")
-    pbar = tqdm(total=args.total_steps, unit="step", desc="Training")
+    # total_steps+1 perché train_nca fa range(total_steps+1) iterazioni
+    pbar = tqdm(
+        total=args.total_steps + 1,
+        unit=" step",
+        desc="Training",
+        bar_format="{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}] loss={postfix}",
+        dynamic_ncols=True,
+        mininterval=0.2,
+    )
 
     def on_progress(step: int, total_steps: int, loss: float) -> None:
         pbar.update(1)
-        pbar.set_postfix(loss=f"{loss:.2e}")
+        pbar.set_postfix_str(f"{loss:.2e}")
 
     results = train_nca(
         model_mix,
