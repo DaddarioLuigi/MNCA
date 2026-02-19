@@ -296,10 +296,16 @@ def main() -> None:
     pbar.close()
 
     trained_model = results.get("final_model", model_mix.cpu())
+    loss_history = results.get("loss", [])
 
     # Salva pesi
     torch.save(trained_model.state_dict(), args.checkpoint_path)
     print("Modello salvato in", args.checkpoint_path)
+
+    # Salva loss per valutazione/plot successivi (stesso nome del checkpoint + _loss.npy)
+    loss_path = args.checkpoint_path.parent / f"{args.checkpoint_path.stem}_loss.npy"
+    np.save(loss_path, np.array(loss_history, dtype=np.float32))
+    print("Loss salvata in", loss_path)
 
     # Figura di confronto GT vs predizione finale (per la tesi)
     trained_model = trained_model.to(device)
