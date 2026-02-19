@@ -11,17 +11,21 @@ import os
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '.')))
 from mix_NCA.TissueModel import create_complex_model_example
 
-def generate_histories(output_path='notebooks/histories.npy', n_simulations=1000, n_steps=500):
+def generate_histories(output_path='notebooks/histories.npy', n_simulations=1000, n_steps=500, seed=None):
     """
     Generate histories.npy file by running tissue simulations.
-    
+
     Args:
         output_path: Path where to save histories.npy
         n_simulations: Number of simulations to run
         n_steps: Number of steps per simulation
+        seed: Optional integer random seed for reproducible generation.
     """
+    if seed is not None:
+        np.random.seed(seed)
+        print(f"Random seed set to {seed} for reproducible data generation.")
     print(f"Generating {n_simulations} simulations with {n_steps} steps each...")
-    
+
     histories = []
     spatial_models = []
     
@@ -50,18 +54,21 @@ if __name__ == "__main__":
                         help='Number of simulations to run (default: 1000)')
     parser.add_argument('--n_steps', type=int, default=500,
                         help='Number of steps per simulation (default: 500)')
-    
+    parser.add_argument('--seed', type=int, default=None,
+                        help='Random seed for reproducible generation (default: none)')
+
     args = parser.parse_args()
-    
+
     # Ensure output directory exists
     output_dir = os.path.dirname(args.output_path)
     if output_dir and not os.path.exists(output_dir):
         os.makedirs(output_dir)
         print(f"Created directory: {output_dir}")
-    
+
     generate_histories(
         output_path=args.output_path,
         n_simulations=args.n_simulations,
-        n_steps=args.n_steps
+        n_steps=args.n_steps,
+        seed=args.seed,
     )
 

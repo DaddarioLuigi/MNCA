@@ -1595,15 +1595,39 @@ class NeighborhoodSizeAnalyzer:
         eta_squared = (h_stat - k_groups + 1) / (n_total - k_groups)
         return max(0.0, eta_squared)  # Ensure non-negative
     
+    def _holm_corrected_significance(self, p_values: List[float], alpha: float) -> List[bool]:
+        """Apply Holm correction: sort p-values, reject H_(i) if p_(i) <= alpha/(k-i+1)."""
+        if not p_values:
+            return []
+        k = len(p_values)
+        order = np.argsort(p_values)
+        p_sorted = np.array(p_values)[order]
+        rejected = [False] * k
+        for i in range(k):
+            # Holm: reject hypothesis at rank i+1 if p_sorted[i] <= alpha/(k-i)
+            if p_sorted[i] <= alpha / (k - i):
+                rejected[order[i]] = True
+            else:
+                rejected[order[i]] = False
+        return rejected
+
     def statistical_significance_tests(self, alpha: float = 0.05, 
                                        correction_method: str = 'bonferroni',
-                                       include_effect_size: bool = True) -> pd.DataFrame:
+                                       include_effect_size: bool = True,
+                                       step_length_filter: Optional[int] = None,
+                                       baseline_nb: Optional[int] = None) -> pd.DataFrame:
         """
-        Perform statistical significance tests to compare neighborhood sizes
+        Perform statistical significance tests to compare neighborhood sizes.
+        
+        When baseline_nb is set (e.g. 2), post-hoc comparisons are only each NB vs baseline,
+        with Holm correction. This answers: which NB are significantly different from the baseline?
+        (Testing vs NB=1 is trivial since NB=1 is inadequate; testing vs NB=2 or NB=3 is meaningful.)
         
         Args:
             alpha: Significance level (default 0.05)
-            correction_method: Multiple comparison correction method ('bonferroni' or 'fdr_bh')
+            correction_method: 'bonferroni', 'holm', or 'fdr_bh'
+            step_length_filter: If set (e.g. 100), restrict to this step length only.
+            baseline_nb: If set (e.g. 2), post-hoc compares each other NB only vs this baseline, with Holm.
         
         Returns:
             DataFrame with test results
@@ -1613,9 +1637,12 @@ class NeighborhoodSizeAnalyzer:
         print(f"{'='*60}\n")
         print(f"Significance level (alpha): {alpha}")
         print(f"Multiple comparison correction: {correction_method}")
-        if correction_method == 'bonferroni':
-            print(f"Note: With 5 groups, there are 10 pairwise comparisons.")
-            print(f"Bonferroni corrected alpha = {alpha}/10 = {alpha/10:.6f}")
+        if step_length_filter is not None:
+            print(f"Step length filter: {step_length_filter}")
+        if baseline_nb is not None:
+            print(f"Post-hoc baseline: NB={baseline_nb} (only comparisons vs NB={baseline_nb}, Holm-corrected)")
+        if correction_method == 'bonferroni' and baseline_nb is None:
+            print(f"Note: With 7 groups, there are 21 pairwise comparisons.")
         print()
         
         # Load raw data from pickle files
@@ -1630,10 +1657,26 @@ class NeighborhoodSizeAnalyzer:
                     raw_data_list.append(pd.DataFrame(raw_data))
         
         if not raw_data_list:
-            print("Warning: No raw data found. Please run load_or_evaluate_models() first.")
-            return pd.DataFrame()
+            # Fallback: load from per-simulation CSV if present (e.g. tissue_simulation_nb_sweep_300x100)
+            print("No raw_metrics_data.pkl found. Trying raw_metrics_per_simulation.csv per NB folder...")
+            for nb_size in [1, 2, 3, 4, 5, 6, 7]:
+                exp_dir = self.base_dir / f"NB_{nb_size}"
+                csv_path = exp_dir / 'raw_metrics_per_simulation.csv'
+                if csv_path.exists():
+                    df_nb = pd.read_csv(csv_path)
+                    df_nb['Neighborhood Size'] = nb_size
+                    raw_data_list.append(df_nb)
+            if not raw_data_list:
+                print("Warning: No raw data found (no pkl and no per-simulation CSV).")
+                return pd.DataFrame()
         
         raw_df = pd.concat(raw_data_list, ignore_index=True)
+        if step_length_filter is not None and 'Step Length' in raw_df.columns:
+            raw_df = raw_df[raw_df['Step Length'] == step_length_filter].copy()
+            if len(raw_df) == 0:
+                print(f"Warning: No data left after filtering to Step Length={step_length_filter}.")
+                return pd.DataFrame()
+            print(f"Filtered to Step Length={step_length_filter}: {len(raw_df)} rows.")
         
         metric_cols = ['KL Divergence', 'Chi-Square', 'Categorical MMD', 
                       'Tumor Size Diff', 'Border Size Diff', 'Spatial Variance Diff']
@@ -1708,72 +1751,120 @@ class NeighborhoodSizeAnalyzer:
                     
                     # Post-hoc pairwise comparisons (Mann-Whitney U)
                     if p_value_kw < alpha and len(groups) > 2:
-                        n_comparisons = len(list(combinations(range(len(nb_sizes)), 2)))
-                        alpha_corrected = alpha / n_comparisons if correction_method == 'bonferroni' else alpha
-                        
-                        for i, j in combinations(range(len(nb_sizes)), 2):
+                        if baseline_nb is not None:
+                            # Compare each other NB only vs baseline; apply Holm across those comparisons
                             try:
-                                u_stat, p_value_mw = mannwhitneyu(groups[i], groups[j], alternative='two-sided')
-                                
-                                # Check for complete separation
-                                data_i, data_j = groups[i], groups[j]
-                                complete_separation = False
-                                if np.all(data_i < data_j) or np.all(data_i > data_j):
-                                    complete_separation = True
-                                
-                                # Apply correction
-                                if correction_method == 'bonferroni':
-                                    p_value_corrected = min(p_value_mw * n_comparisons, 1.0)
-                                else:
-                                    p_value_corrected = p_value_mw
-                                
-                                if p_value_corrected < 0.001:
-                                    sig_stars = "***"
-                                elif p_value_corrected < 0.01:
-                                    sig_stars = "**"
-                                elif p_value_corrected < 0.05:
-                                    sig_stars = "*"
-                                else:
-                                    sig_stars = ""
-                                
-                                # Use alpha_corrected for significance determination (BUG FIX)
-                                is_significant = p_value_corrected < alpha_corrected
-                                
-                                # Calculate effect size for Mann-Whitney U
-                                r_effect = self._calculate_effect_size_mannwhitney(data_i, data_j, u_stat) if include_effect_size else None
-                                
-                                # For complete separation, also calculate mean difference for more informative comparison
-                                mean_diff = None
-                                if complete_separation and include_effect_size:
-                                    mean_diff = abs(np.mean(data_i) - np.mean(data_j))
-                                
-                                result_dict = {
-                                    'Model Type': model_type,
-                                    'Metric': metric,
-                                    'Test': f'Mann-Whitney U (NB{nb_sizes[i]} vs NB{nb_sizes[j]})',
-                                    'H_statistic': u_stat,
-                                    'p_value': p_value_corrected,
-                                    'Significant': is_significant,
-                                    'Significance': sig_stars
-                                }
-                                
-                                if include_effect_size:
-                                    result_dict['Effect_Size'] = r_effect
-                                    result_dict['Effect_Size_Type'] = 'r'
-                                    if mean_diff is not None:
-                                        result_dict['Mean_Diff'] = mean_diff
-                                
-                                test_results.append(result_dict)
-                                
-                                # Warn about complete separation
-                                if complete_separation:
-                                    direction = ">" if np.all(data_i > data_j) else "<"
-                                    mean_i, mean_j = np.mean(data_i), np.mean(data_j)
-                                    print(f"  Note: Complete separation in {model_type} - {metric} (NB{nb_sizes[i]} {direction} NB{nb_sizes[j]}, "
-                                          f"mean diff={abs(mean_i-mean_j):.4f})")
+                                baseline_idx = nb_sizes.index(baseline_nb)
+                            except ValueError:
+                                baseline_idx = None
+                            if baseline_idx is not None:
+                                baseline_group = groups[baseline_idx]
+                                # Compare only NB > baseline (e.g. 3,4,5,6,7 vs 2); exclude NB=1 as trivial
+                                other_indices = [idx for idx in range(len(nb_sizes)) if nb_sizes[idx] > baseline_nb]
+                                pair_results = []  # (nb_other, raw_p, u_stat, ...) for Holm
+                                for j in other_indices:
+                                    try:
+                                        u_stat, p_value_mw = mannwhitneyu(baseline_group, groups[j], alternative='two-sided')
+                                        data_i, data_j = baseline_group, groups[j]
+                                        complete_sep = np.all(data_i < data_j) or np.all(data_i > data_j)
+                                        r_effect = self._calculate_effect_size_mannwhitney(data_i, data_j, u_stat) if include_effect_size else None
+                                        mean_diff = abs(np.mean(data_i) - np.mean(data_j)) if complete_sep and include_effect_size else None
+                                        pair_results.append({
+                                            'nb_other': nb_sizes[j], 'raw_p': p_value_mw, 'u_stat': u_stat,
+                                            'r_effect': r_effect, 'mean_diff': mean_diff, 'complete_sep': complete_sep,
+                                        })
+                                    except Exception as e:
+                                        print(f"  Warning: Could not perform post-hoc test for {model_type} - {metric} (NB{baseline_nb} vs NB{nb_sizes[j]}): {e}")
+                                if pair_results:
+                                    p_list = [r['raw_p'] for r in pair_results]
+                                    holm_significant = self._holm_corrected_significance(p_list, alpha)
+                                    for r, is_sig in zip(pair_results, holm_significant):
+                                        p_corr = min(r['raw_p'] * len(p_list), 1.0)  # for display we keep raw or simple correction
+                                        if r['raw_p'] < 0.001:
+                                            sig_stars = "***"
+                                        elif r['raw_p'] < 0.01:
+                                            sig_stars = "**"
+                                        elif r['raw_p'] < 0.05:
+                                            sig_stars = "*"
+                                        else:
+                                            sig_stars = ""
+                                        result_dict = {
+                                            'Model Type': model_type,
+                                            'Metric': metric,
+                                            'Test': f'Mann-Whitney U (NB{r["nb_other"]} vs NB{baseline_nb})',
+                                            'NB_other': r['nb_other'],
+                                            'H_statistic': r['u_stat'],
+                                            'p_value': r['raw_p'],
+                                            'Significant': is_sig,
+                                            'Significance': sig_stars
+                                        }
+                                        if include_effect_size:
+                                            result_dict['Effect_Size'] = r['r_effect']
+                                            result_dict['Effect_Size_Type'] = 'r'
+                                            if r.get('mean_diff') is not None:
+                                                result_dict['Mean_Diff'] = r['mean_diff']
+                                        test_results.append(result_dict)
+                            else:
+                                # baseline_nb not in nb_sizes (e.g. no data for that NB)
+                                pass
+                        else:
+                            # All pairwise comparisons with Bonferroni or uncorrected
+                            n_comparisons = len(list(combinations(range(len(nb_sizes)), 2)))
+                            alpha_corrected = alpha / n_comparisons if correction_method == 'bonferroni' else alpha
+                            
+                            for i, j in combinations(range(len(nb_sizes)), 2):
+                                try:
+                                    u_stat, p_value_mw = mannwhitneyu(groups[i], groups[j], alternative='two-sided')
                                     
-                            except Exception as e:
-                                print(f"  Warning: Could not perform post-hoc test for {model_type} - {metric} (NB{nb_sizes[i]} vs NB{nb_sizes[j]}): {e}")
+                                    data_i, data_j = groups[i], groups[j]
+                                    complete_separation = False
+                                    if np.all(data_i < data_j) or np.all(data_i > data_j):
+                                        complete_separation = True
+                                    
+                                    if correction_method == 'bonferroni':
+                                        p_value_corrected = min(p_value_mw * n_comparisons, 1.0)
+                                    else:
+                                        p_value_corrected = p_value_mw
+                                    
+                                    if p_value_corrected < 0.001:
+                                        sig_stars = "***"
+                                    elif p_value_corrected < 0.01:
+                                        sig_stars = "**"
+                                    elif p_value_corrected < 0.05:
+                                        sig_stars = "*"
+                                    else:
+                                        sig_stars = ""
+                                    
+                                    is_significant = p_value_corrected < alpha_corrected
+                                    
+                                    r_effect = self._calculate_effect_size_mannwhitney(data_i, data_j, u_stat) if include_effect_size else None
+                                    mean_diff = abs(np.mean(data_i) - np.mean(data_j)) if complete_separation and include_effect_size else None
+                                    
+                                    result_dict = {
+                                        'Model Type': model_type,
+                                        'Metric': metric,
+                                        'Test': f'Mann-Whitney U (NB{nb_sizes[i]} vs NB{nb_sizes[j]})',
+                                        'H_statistic': u_stat,
+                                        'p_value': p_value_corrected,
+                                        'Significant': is_significant,
+                                        'Significance': sig_stars
+                                    }
+                                    if include_effect_size:
+                                        result_dict['Effect_Size'] = r_effect
+                                        result_dict['Effect_Size_Type'] = 'r'
+                                        if mean_diff is not None:
+                                            result_dict['Mean_Diff'] = mean_diff
+                                    
+                                    test_results.append(result_dict)
+                                    
+                                    if complete_separation:
+                                        direction = ">" if np.all(data_i > data_j) else "<"
+                                        mean_i, mean_j = np.mean(data_i), np.mean(data_j)
+                                        print(f"  Note: Complete separation in {model_type} - {metric} (NB{nb_sizes[i]} {direction} NB{nb_sizes[j]}, "
+                                              f"mean diff={abs(mean_i-mean_j):.4f})")
+                                    
+                                except Exception as e:
+                                    print(f"  Warning: Could not perform post-hoc test for {model_type} - {metric} (NB{nb_sizes[i]} vs NB{nb_sizes[j]}): {e}")
                 
                 except Exception as e:
                     print(f"  Warning: Could not perform Kruskal-Wallis test for {model_type} - {metric}: {e}")

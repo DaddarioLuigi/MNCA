@@ -5,4 +5,24 @@
 
 \epigraph{\enquote{Computer Science is no more about computers than astronomy is about telescopes.}}{\emph{E. W. Dijkstra}}
 
-This chapter summarizes the conclusions of the work.
+This chapter summarizes the conclusions of the work and outlines limitations and possible extensions.
+
+\section{Summary and limitations}
+\label{sec:conc:summary}
+
+The thesis showed that the spatial neighborhood size \(NB\) in Mixture NCA has a measurable impact on long-horizon tissue-like dynamics: \(NB=1\) is inadequate, while \(NB \ge 2\) yields a clear improvement; beyond that, the ``best'' \(NB\) depends on the metric and the model (Mixture vs.\ Stochastic Mixture).
+The main threats to validity are summarized in \cref{sec:impl:threats}: dependence on the synthetic simulator and dataset size, the limited range of \(NB\) explored, and the absence of validation-based model selection in the curriculum experiment.
+These caveats do not invalidate the core finding---that neighborhood size matters and that a controlled protocol is needed to observe it---but they bound the generality of the conclusions.
+
+\section{Promising directions for future work}
+\label{sec:conc:future}
+
+Several directions could strengthen or extend this work:
+\begin{itemize}
+  \item \textbf{Longer training on long windows:} train for more epochs on 500-step windows (or add further curriculum phases) to reduce the gap between generated and ground-truth trajectories at long horizons.
+  \item \textbf{Validation loss and early stopping:} compute a validation loss using free rollouts and use it for early stopping, so that optimization is aligned with the evaluation regime.
+  \item \textbf{Final-state and trajectory-level losses:} add losses that directly reward how close the final state of a rollout is to the ground truth (e.g., distribution of cell types), or that penalize drift over the full trajectory.
+  \item \textbf{Scheduled teacher forcing:} gradually reduce the fraction of steps where the true state is fed during training, so that the model learns to correct its own errors and exposure bias is mitigated.
+  \item \textbf{Evaluation with multiple rollouts:} for the stochastic model, run several rollouts per initial condition and report averaged or best-of-\(k\) metrics to better capture typical behavior.
+\end{itemize}
+We leave these ideas for future work; the current experiments already establish that the neighborhood-size effect is real and carries over to the long-horizon curriculum setting.

@@ -5,42 +5,216 @@
 
 \epigraph{\enquote{I believe that inside every tool is a hammer.}}{\emph{Adam Savage}}
 
-This chapter describes the tools and frameworks used in the thesis.
+This chapter describes the software stack, code organisation, and execution environment used in this thesis.
+The aim is to give a precise and self-contained account of how the experiments are implemented and how they can be reproduced.
 
 %----------------------------------------------------------
 \section{Software stack}
 %----------------------------------------------------------
 
-The experiments in this thesis are implemented in Python.
-Most model components are implemented with \texttt{PyTorch}, while data manipulation and analysis use standard scientific libraries (e.g., \texttt{NumPy}, \texttt{pandas}, \texttt{matplotlib}).
-Interactive exploration and plotting were done in an interactive environment, while long experiment runs were executed via reproducible command-line pipelines.
+All experiments are implemented in Python.
+\Cref{tab:tools:stack} summarises the main libraries and their role.
+The core models (NCA, Mixture NCA, and their extended and stochastic variants) are implemented with \texttt{PyTorch}~\cite{pytorch}, which provides automatic differentiation and efficient GPU execution for the repeated unrolling of the learned dynamics.
+Numerical arrays and data handling use \texttt{NumPy} and \texttt{pandas}; visualisation uses \texttt{matplotlib}, \texttt{seaborn}, and \texttt{plotly} (the latter for interactive dashboards and for exporting static figures such as PNG or PDF).
+Dependency versions are pinned in \texttt{requirements.txt} at the project root (e.g.\ \texttt{torch>=2.0.0}, \texttt{numpy>=1.24.0}), so that a fresh environment can be reconstructed for reproducibility.
 
-\paragraph{Reproducibility and artifacts.}
-To make experiments easier to reproduce and inspect, the pipeline saves:
-(i) trained model checkpoints (e.g., \texttt{.pt} files),
-(ii) datasets as serialized arrays (for reproducibility),
-(iii) per-configuration metrics as \texttt{.csv},
-and (iv) plots and dashboards as static images or \texttt{.html} reports.
+Model training and evaluation are run from the command line via dedicated scripts; the results reported in this thesis are produced by these same pipelines.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Main software dependencies and their role in the project.}
+  \label{tab:tools:stack}
+  \begin{tabular}{@{}ll@{}}
+    \hline
+    \textbf{Library} & \textbf{Role} \\
+    \hline
+    PyTorch & Model implementation, automatic differentiation, GPU execution \\
+    NumPy, pandas & Arrays, data handling, metrics aggregation \\
+    matplotlib, seaborn, plotly & Plotting, dashboards, static figure export \\
+    tqdm, loguru & Progress bars and logging \\
+    \hline
+  \end{tabular}
+\end{table}
 
 %----------------------------------------------------------
-\section{Code organization}
+\section{Code organisation}
 %----------------------------------------------------------
 
-The repository is organized around a few core components:
+The repository is structured around a small number of components.
+\Cref{tab:tools:components} gives an overview; the paragraphs below add detail and, where useful, tables for script options and outputs.
 
-\begin{itemize}
-\item \textbf{Models:} implementations of NCA and mixture-based extensions are in \texttt{mix\_NCA/}.
-\item \textbf{Synthetic biological simulator:} a biologically-inspired toy simulator is used to generate supervised tissue-growth trajectories.
-\item \textbf{Experiment pipeline:} automated training/evaluation sweeps with standardized outputs (checkpoints, metrics, plots).
-\item \textbf{Analysis pipeline:} aggregation and visualization code that produces the final dashboards used in the thesis.
-\end{itemize}
+\begin{table}[htbp]
+  \centering
+  \caption{Main components of the repository.}
+  \label{tab:tools:components}
+  \begin{tabular}{@{}llp{6.2cm}@{}}
+    \hline
+    \textbf{Component} & \textbf{Location} & \textbf{Role} \\
+    \hline
+    Models & \texttt{mix\_NCA/} & NCA and mixture NCA variants; tissue simulator; training and evaluation utilities \\
+    Data generation & project root & Script to generate and save tissue histories (\texttt{.npy}) \\
+    Experiment pipeline & \texttt{experiments/} & Training and evaluation over neighbourhood sizes; curriculum; metrics and checkpoints \\
+    Analysis pipeline & \texttt{experiments/} & Scripts that read results and produce figures and tables \\
+    \hline
+  \end{tabular}
+\end{table}
 
-In particular, the neighborhood-size sweep discussed in \cref{c:implementation} uses a pre-generated dataset of simulated histories plus the metrics and checkpoints produced by the sweep runs.
+\paragraph{Models (\texttt{mix\_NCA/}).}
+The package contains the NCA and mixture-based models: \texttt{NCA.py}, \texttt{MixtureNCA.py}, and the extended variants \texttt{ExtendedNCA.py}, \texttt{ExtendedMixtureNCA.py}, \texttt{ExtendedMixtureNCANoise.py} (configurable neighbourhood size, stochastic rule selection, noise).
+The tissue simulator in \texttt{TissueModel.py} defines the cell types (\texttt{ComplexCellType}: EMPTY, STEM, INTERMEDIATE\_1/2, DIFFERENTIATED\_1/2), the local update rules (death, survival, division, differentiation), and the \texttt{simulate} method.
+\texttt{BiologicalMetrics.py} implements the comparison of generated vs.\ ground-truth distributions (KL divergence, chi-square, categorical MMD, tumour size, border size, spatial variance).
+Training utilities (grid-to-channels conversion, \texttt{train\_nca\_dyn}, classification update network) are in \texttt{utils\_simulations.py}.
+
+\paragraph{Data generation.}
+Tissue histories are produced by the data-generation script at the project root.
+The script instantiates the complex tissue model via \mbox{\texttt{TissueModel.create\_complex\_model\_example}} with a random number of initial stem cells per run, simulates each trajectory for a fixed number of steps, and saves the list of histories as a single \texttt{.npy} file.
+\Cref{tab:tools:genhist} lists the script arguments; \Cref{tab:tools:dataset} specifies the dataset used for the main neighbourhood-size sweep in this thesis (see \cref{c:implementation}).
+
+\begin{table}[htbp]
+  \centering
+  \caption{Command-line arguments of the data-generation script.}
+  \label{tab:tools:genhist}
+  \begin{tabular}{@{}llp{5.5cm}@{}}
+      \hline
+      \textbf{Argument} & \textbf{Default} & \textbf{Description} \\
+      \hline
+      \texttt{--output\_path} & \texttt{notebooks/histories.npy} & Path for the output file (\texttt{.npy}) \\
+      \texttt{--n\_simulations} & 1000 & Number of trajectories to generate \\
+      \texttt{--n\_steps} & 500 & Number of steps per trajectory \\
+      \texttt{--seed} & (none) & Optional; if set, enables reproducible generation \\
+      \hline
+  \end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+  \centering
+  \caption{Dataset used for the main neighbourhood-size sweep in this thesis.}
+  \label{tab:tools:dataset}
+  \begin{tabular}{@{}ll@{}}
+    \hline
+    \textbf{Parameter} & \textbf{Value} \\
+    \hline
+    Number of histories & 300 \\
+    Steps per history & 500 \\
+    Reproducibility & Fixed \texttt{--seed} when required \\
+    \hline
+  \end{tabular}
+\end{table}
+
+\paragraph{Experiment pipeline.}
+The main entry point is in \texttt{experiments/}.
+It loads a pre-generated \texttt{histories.npy}, splits into training and validation (e.g.\ 80\%/20\%), and for each requested neighbourhood size trains the Mixture NCA and Stochastic Mixture NCA with the same hyperparameters.
+Curriculum learning is controlled by \texttt{--curriculum} and comma-separated options (\texttt{--curriculum\_time\_lengths}, \texttt{--curriculum\_epochs}, \texttt{--curriculum\_lrs}, \texttt{--curriculum\_update\_every}); early stopping is applied on training loss within each phase.
+After training, the script evaluates each model at several rollout lengths (e.g.\ 25, 100, 500 steps) via \texttt{compare\_generated\_distributions} in \texttt{BiologicalMetrics}, and optionally generates rollout videos.
+\Cref{tab:tools:expargs} summarises the main arguments; \Cref{tab:tools:outputs} describes the output layout.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Main command-line arguments of the experiment script.}
+  \label{tab:tools:expargs}
+  \begin{tabular}{@{}lp{3.1cm}p{6.4cm}@{}}
+      \hline
+      \textbf{Argument} & \textbf{Default} & \textbf{Description} \\
+      \hline
+      \texttt{--histories\_path} & \texttt{../notebooks/histories.npy} & Path to histories file (\texttt{.npy}) \\
+      \texttt{--output\_dir} & \texttt{results\_extended} & Root directory for all outputs \\
+      \texttt{--neighborhood\_sizes} & \texttt{3,4,5,6,7} & Comma-separated list of sizes \\
+      \texttt{--curriculum} & off & Enable curriculum learning \\
+      \texttt{--curriculum\_time\_lengths} & \texttt{35,100,500} & Time lengths per phase \\
+      \texttt{--curriculum\_epochs} & \texttt{250,150,60} & Epochs per phase \\
+      \texttt{--step\_lengths} & \texttt{25,100,500} & Rollout lengths for evaluation \\
+      \texttt{--seed} & (none) & Optional; fixes NumPy and PyTorch seeds \\
+      \texttt{--device} & \texttt{auto} & \texttt{auto}, \texttt{cuda}, \texttt{mps}, or \texttt{cpu} \\
+      \hline
+  \end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+  \centering
+  \caption{Output layout under \texttt{output\_dir/} (experiment run).}
+  \label{tab:tools:outputs}
+  \begin{tabular}{@{}lp{7.2cm}@{}}
+    \hline
+    \textbf{Item} & \textbf{Description} \\
+    \hline
+    \texttt{NB\_$k$/} & One directory per neighbourhood size $k$ \\
+    \texttt{NB\_$k$/mixture\_nca\_curriculum.pt} & Mixture NCA checkpoint (with curriculum) \\
+    \texttt{NB\_$k$/stochastic\_mix\_nca\_curriculum.pt} & Stochastic Mixture NCA checkpoint \\
+    \texttt{NB\_$k$/summary.json} & Hyperparameters, seed, paths, curriculum schedule \\
+    \texttt{NB\_$k$/biological\_metrics.csv} & Metrics per model and step length \\
+    \texttt{all\_neighborhood\_sizes\_metrics.csv} & Aggregated metrics for analysis scripts \\
+    \hline
+  \end{tabular}
+\end{table}
+
+\paragraph{Analysis pipeline.}
+Scripts in \texttt{experiments/} read the outputs above and produce the figures and tables used in the thesis (e.g.\ curriculum analysis, neighbourhood-size comparison, per-simulation metrics).
+They assume the directory layout in \Cref{tab:tools:outputs} and are documented in their docstrings.
+
+%----------------------------------------------------------
+\section{Reproducibility and artifacts}
+%----------------------------------------------------------
+
+Reproducibility is supported at three levels (\Cref{tab:tools:repro}).
+
+\begin{table}[htbp]
+  \centering
+  \caption{Reproducibility mechanisms.}
+  \label{tab:tools:repro}
+  \begin{tabular}{@{}p{1.8cm}p{10.2cm}@{}}
+    \hline
+    \textbf{Level} & \textbf{Mechanism} \\
+    \hline
+    Data & Histories file is a serialised NumPy array; it can be regenerated with the data-generation script using the same \texttt{--n\_simulations}, \texttt{--n\_steps}, and \texttt{--seed}. \\
+    \hline
+    Randomness & The experiment script accepts \texttt{--seed}; when set, NumPy and PyTorch seeds are fixed at the start of the run. The seed and the absolute path to the histories file are stored in \texttt{summary.json}. \\
+    \hline
+    Configuration & Each run records the full training configuration in \texttt{summary.json} (neighbourhood size, epochs, time length, curriculum, checkpoint paths). Checkpoints and \texttt{biological\_metrics.csv} allow re-evaluation or further analysis without re-training. \\
+    \hline
+  \end{tabular}
+\end{table}
+
+A fully reproducible run from scratch can be obtained as in \Cref{tab:tools:steps}.
+No additional tooling (e.g.\ containers or workflow engines) is required.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Steps for a fully reproducible run.}
+  \label{tab:tools:steps}
+  \begin{tabular}{@{}cp{10.5cm}@{}}
+    \hline
+    \textbf{Step} & \textbf{Action} \\
+    \hline
+    1 & Run the data-generation script with \texttt{--output\_path \textit{path}}, \texttt{--n\_simulations 300}, \texttt{--n\_steps 500}, \texttt{--seed 42}. \\
+    2 & Run the experiment script with \texttt{--histories\_path} pointing to that file, \texttt{--seed 42}, and the desired \texttt{--neighborhood\_sizes} and \texttt{--curriculum} options. \\
+    3 & Run the analysis scripts with \texttt{--results\_dir} (or equivalent) set to the same \texttt{output\_dir}. \\
+    \hline
+  \end{tabular}
+\end{table}
 
 %----------------------------------------------------------
 \section{Compute and execution}
 %----------------------------------------------------------
 
-Training is GPU-friendly but not strictly required: the code can fall back to CPU execution.
-Where available, the implementation supports selecting the best backend automatically (CUDA, Apple MPS, or CPU).
-For longer training horizons (hundreds of rollout steps), computational cost is mainly dominated by repeated unrolls of the learned dynamics, so experiment design (dataset size, rollout horizon, and curriculum schedules) plays an important role in iteration speed.
+Training and evaluation can run on CPU but benefit from a GPU when available.
+The experiment script supports \texttt{--device} with the values in \Cref{tab:tools:device}.
+When set to \texttt{auto}, the code selects CUDA if available, otherwise Apple MPS (e.g.\ on M-series Macs), otherwise CPU.
+
+\begin{table}[htbp]
+  \centering
+  \caption{Values of \texttt{--device} and their effect.}
+  \label{tab:tools:device}
+  \begin{tabular}{@{}ll@{}}
+    \hline
+    \textbf{Value} & \textbf{Effect} \\
+    \hline
+    \texttt{auto} & Use CUDA if available, else MPS, else CPU \\
+    \texttt{cuda} & Use NVIDIA GPU (if available) \\
+    \texttt{mps} & Use Apple Metal (M-series Macs) \\
+    \texttt{cpu} & Use CPU only \\
+    \hline
+  \end{tabular}
+\end{table}
+
+Computational cost is dominated by the repeated unrolling of the NCA over many time steps (training windows and evaluation rollouts).
+The experiments reported in this thesis were run on a single GPU or on CPU, with runtimes on the order of hours for a full sweep over multiple neighbourhood sizes and curriculum phases.

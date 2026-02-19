@@ -228,37 +228,37 @@ Bad-rate = share of runs whose metric is worse than the 95th percentile of the b
 \section{Statistical tests}
 %-------------------------------------------------------------------
 
-Metrics are heavy-tailed, so we use non-parametric tests: Kruskal--Wallis over all \(NB\), then Mann--Whitney U for each \(NB\ge2\) vs.\ \(NB=1\), with Holm correction.
+Metrics are heavy-tailed, so we use non-parametric tests: Kruskal--Wallis over all \(NB\), then Mann--Whitney U with Holm correction for two baselines---each \(NB>2\) vs.\ \(NB=2\), and each \(NB>3\) vs.\ \(NB=3\) (we do not compare against \(NB=1\), which is trivially inadequate).
 
 \begin{table}[htbp]
 \centering
 \small
 \resizebox{\textwidth}{!}{%
-\begin{tabular}{@{}llcc@{}}
+\begin{tabular}{@{}llccc@{}}
 \toprule
-Model & Metric & Kruskal--Wallis $p$ & Significant vs.\ NB=1 (Holm-corrected) \\
+Model & Metric & K-W $p$ & Significant vs.\ NB=2 & Significant vs.\ NB=3 \\
 \midrule
-Mixture NCA & KL Divergence & $<10^{-4}$ & 2,3,4,5,6,7 \\
-Mixture NCA & Chi-Square & $<10^{-4}$ & 2,3,4,5,6,7 \\
-Mixture NCA & Categorical MMD & $<10^{-4}$ & 2,3,4,5,6,7 \\
-Mixture NCA & Tumor Size Diff & $<10^{-4}$ & 2,3,4,5,6,7 \\
-Mixture NCA & Border Size Diff & $<10^{-4}$ & 2,3,4,5,6,7 \\
-Mixture NCA & Spatial Variance Diff & $<10^{-4}$ & 2,3,4,5,6,7 \\
+Mixture NCA & KL Divergence & $<10^{-4}$ & 3,4,5,6,7 & 4,5,6,7 \\
+Mixture NCA & Chi-Square & $<10^{-4}$ & 3,4,5,6,7 & 4,5,6,7 \\
+Mixture NCA & Categorical MMD & $<10^{-4}$ & 3,4,5,6,7 & 4,5,6 \\
+Mixture NCA & Tumor Size Diff & $<10^{-4}$ & 3,4,5,6,7 & 4,5,6,7 \\
+Mixture NCA & Border Size Diff & $<10^{-4}$ & 3,4,5,6,7 & 4,5,6,7 \\
+Mixture NCA & Spatial Variance Diff & $<10^{-4}$ & 3,4,5,6,7 & 4,5,6,7 \\
 \midrule
-Stochastic Mixture NCA & KL Divergence & $<10^{-4}$ & 2,3,4,5,6,7 \\
-Stochastic Mixture NCA & Chi-Square & $<10^{-4}$ & 2,3,4,5,6,7 \\
-Stochastic Mixture NCA & Categorical MMD & $<10^{-4}$ & 2,3,4,5,6 \\
-Stochastic Mixture NCA & Tumor Size Diff & $<10^{-4}$ & 2,3,4,5,6,7 \\
-Stochastic Mixture NCA & Border Size Diff & $<10^{-4}$ & 2,3,4,5,6,7 \\
-Stochastic Mixture NCA & Spatial Variance Diff & $<10^{-4}$ & 2,3,4,5,6,7 \\
+Stochastic Mixture NCA & KL Divergence & $<10^{-4}$ & 3,4,5,6,7 & 4,5,6,7 \\
+Stochastic Mixture NCA & Chi-Square & $<10^{-4}$ & 3,4,5,6,7 & 4,5,6,7 \\
+Stochastic Mixture NCA & Categorical MMD & $<10^{-4}$ & 3,4,5,7 & 4,5,6,7 \\
+Stochastic Mixture NCA & Tumor Size Diff & $<10^{-4}$ & 3,4,5,7 & 4,5,6,7 \\
+Stochastic Mixture NCA & Border Size Diff & $<10^{-4}$ & 4,5,6,7 & 4,5,6,7 \\
+Stochastic Mixture NCA & Spatial Variance Diff & $<10^{-4}$ & 3,4,5,6,7 & 4,5,7 \\
 \bottomrule
 \end{tabular}%
 }
-\caption{Step length = 100. All \(NB\ge2\) are significantly better than \(NB=1\) for both models (Holm-corrected).}
+\caption{Step length = 100. Post-hoc (Holm-corrected): which \(NB>2\) differ from \(NB=2\), and which \(NB>3\) differ from \(NB=3\).}
 \label{tab:stats}
 \end{table}
 
-\textbf{Interpretation.} The gain of \(NB\ge2\) over \(NB=1\) is significant for all metrics and both models. So the effect of \(NB\) is real, not noise. The table also shows that for Stochastic Mixture, \(NB=7\) is not always in the ``significant vs.\ \(NB=1\)'' set (e.g.\ for Categorical MMD only 2--6 are listed); that fits with the idea that the best \(NB\) depends on the metric and that very large \(NB\) does not always help.
+\textbf{Interpretation.} The two baseline columns agree: the effect of \(NB\) is statistically significant. Compared to \(NB=2\), usually all of \(NB=3,4,5,6,7\) are significant (so even \(NB=3\) differs from the minimum); compared to \(NB=3\), we see which of \(NB=4,5,6,7\) differ from that reference---sometimes a subset (e.g.\ Categorical MMD or Spatial Variance) drops one of 6 or 7, meaning that larger \(NB\) is not always significantly better than \(NB=3\). The two baselines thus give a consistent and robust message: neighborhood size matters, and the ``best'' \(NB\) is metric- and model-dependent.
 
 %-------------------------------------------------------------------
 \section{Conclusions}

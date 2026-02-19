@@ -9,7 +9,7 @@
 \usepackage[english]{babel}
 
 %\usepackage[latin9]{inputenc}
-\usepackage[latin1]{inputenc}
+\usepackage[utf8]{inputenc}
 \usepackage{lmodern} % Latin Modern font
 \usepackage[T1]{fontenc}
 
@@ -64,6 +64,7 @@
 \usepackage{verbatim}
 \usepackage{courier}
 \usepackage{float}
+\usepackage{placeins} % \FloatBarrier: evita che le figure flottino oltre (es. in sottosezioni successive)
 
 \lstset{numbersep=5pt,
 numberstyle=\tiny,

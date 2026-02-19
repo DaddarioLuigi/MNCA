@@ -6,7 +6,7 @@
 \epigraph{\enquote{Somewhere, something incredible is waiting to be known.}}{\emph{Carl Sagan}}
 
 This chapter provides a short, high-level summary of the overall thesis findings.
-Detailed results for the neighborhood-size sweep (including metrics, per-simulation diagnostics, and ablations) are reported in \cref{c:implementation}, because they are tightly connected to the experimental pipeline design.
+Detailed results for the neighborhood-size sweep (including metrics, per-simulation diagnostics, and ablations) and for the curriculum learning experiment are reported in \cref{c:implementation}, because they are tightly connected to the experimental pipeline design.
 
 \section{Overall findings}
 \label{sec:results:overall}
@@ -23,3 +23,6 @@ Across all experiments, we find that:
 
 The main takeaway of this thesis is that MNCA can model tissue-like dynamics in a controlled synthetic setting, but careful experimental design is required to obtain interpretable conclusions.
 In particular, the neighborhood-size effect can be masked by training/evaluation confounds when models already fail at long-horizon rollouts.
+Under the controlled sweep (Step~3), KL divergence and the other biological metrics show that \(NB \ge 2\) is significantly better than \(NB=1\), with strong statistical evidence (Kruskal--Wallis \(p < 10^{-4}\) and post-hoc tests); beyond that, no single \(NB\) is best on every metric.
+In the curriculum experiment (\cref{sec:impl:curriculum}), the stochastic variant with \(NB=5\) attains the best long-horizon distributional metrics at 100 and 500 steps (e.g., categorical MMD around 0.04--0.05 at \(NB=5\)), while the deterministic mixture exhibits a metric- and horizon-dependent trade-off and often degrades at long rollouts.
+All setting, qualitative examples, and quantitative results for both experiments are described in the Implementation chapter (\cref{c:implementation}); limitations and threats to validity are discussed in \cref{sec:impl:threats}.

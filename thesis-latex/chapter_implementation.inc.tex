@@ -2,10 +2,15 @@
 \chapter{Implementation}
 \label{c:implementation}
 %-------------------------------------------------------------------
+% Figure placement: [H] (float package) keeps each figure next to its
+% referencing text; avoids figures floating to later pages/sections.
 
 \epigraph{\enquote{Sometimes, the elegant implementation is just a function. Not a method. Not a class. Not a framework. Just a function.}}{\emph{John Carmack}}
 
-This chapter shows the details of the implementation of the work.
+This chapter describes the implementation and experimental pipeline of the thesis.
+The first part covers data generation (the biological toy model and the notion of histories) and how NCA-style models are trained and evaluated.
+The central part is devoted to the \emph{controlled neighborhood sweep} (Step~3): a protocol designed to isolate the effect of spatial neighborhood size \(NB\) on long-horizon behavior, with detailed metrics, robustness analysis, and non-parametric statistical tests.
+The final part presents a second experiment, \emph{curriculum learning} on 500-step trajectories, to confirm that the neighborhood-size effect carries over to a long-horizon regime; it also discusses why generated trajectories can diverge from ground truth and outlines possible improvements.
 
 %----------------------------------------------------------
 \section{How experiments are structured}
@@ -25,6 +30,7 @@ At a high level, each experiment follows the same steps:
 
 %----------------------------------------------------------
 \section{Data generation and biological toy model}
+\label{sec:impl:data}
 %----------------------------------------------------------
 
 Before training NCAs, we need supervised trajectories representing plausible tissue dynamics.
@@ -60,7 +66,7 @@ each occupied site may die, survive, or divide into a nearby empty site; if a di
 
 The goal is not to perfectly match biology, but to produce trajectories with growth and spatial organization that can serve as supervised targets for learning a local update rule.
 
-\begin{figure}[t]
+\begin{figure}[H]
   \centering
   \includegraphics[width=\textwidth]{figs/tissue_examples/history_generation_example.png}
   \caption{Example of a generated history (ground truth) shown at multiple time steps. Each panel is a snapshot of the same simulation at a different time point.}
@@ -90,14 +96,14 @@ This gap is important when we compare neighborhood sizes, because a low short-ho
 After training, we can use a model to generate a trajectory by starting from an initial grid \(x_0\) and iterating the learned update rule for multiple steps, producing \(\hat{x}_1, \hat{x}_2, \dots, \hat{x}_T\).
 Figure~\ref{fig:impl:model:rollout_example} shows an example rollout over multiple steps (same initial condition as \cref{fig:impl:data:history_example}), illustrating what it means for the model to ``free-run''.
 
-\begin{figure}[t]
+\begin{figure}[H]
   \centering
   \includegraphics[width=\textwidth]{figs/tissue_examples/model_rollout_example.png}
   \caption{Example of a model-generated rollout over multiple steps, starting from the same initial condition used for the ground-truth history. This visualization helps qualitatively assess whether the learned dynamics remain stable when the model is run freely.}
   \label{fig:impl:model:rollout_example}
 \end{figure}
 
-\begin{figure}[t]
+\begin{figure}[H]
   \centering
   \begin{minipage}[t]{0.49\textwidth}
     \centering
@@ -188,7 +194,7 @@ Figure~\ref{fig:impl:step3:dashboard} summarizes the overall trends across neigh
 The main qualitative pattern is consistent across metrics: \(NB=1\) is systematically inadequate, while moving to \(NB\ge2\) yields a sharp performance improvement.
 Beyond this first jump, increasing \(NB\) produces a non-monotonic trade-off between matching global distributions (e.g., KL divergence) and matching spatial structure (e.g., tumor size and border properties).
 
-\begin{figure}[t]
+\begin{figure}[H]
   \centering
   \includegraphics[width=\textwidth]{figs/neighborhood_analysis/nb_sweep_300x100/metrics_dashboard_full.png}
   \caption{Step 3: complete dashboard for the neighborhood sweep. We report mean and variability (standard deviation computed over the available step-length conditions) for the six metrics used in the analysis: KL divergence, Chi-square, categorical MMD, tumor size difference, border size difference, and spatial variance difference.}
@@ -207,14 +213,14 @@ For \(NB\ge2\), both models reach low KL on average, but the best neighborhood c
 To interpret robustness, we inspect \emph{per-simulation} distributions of the metrics using violin plots.
 Compared to mean-only summaries, violins reveal heavy tails and outliers: these correspond to runs that converge to qualitatively wrong outcomes (failure modes), even when the median performance is competitive.
 
-\begin{figure}[t]
+\begin{figure}[H]
   \centering
   \includegraphics[width=\textwidth]{figs/neighborhood_analysis/nb_sweep_300x100/violin_KL_Divergence.png}
   \caption{Step 3: per-simulation violin plots for KL divergence (lower is better), faceted by step length. Violin width reflects density, and inner quartiles highlight robust central behavior; long upper tails indicate rare but severe failures that become more likely for specific neighborhood sizes and time horizons.}
   \label{fig:impl:step3:violin:kl}
 \end{figure}
 
-\begin{figure}[t]
+\begin{figure}[H]
   \centering
   \includegraphics[width=\textwidth]{figs/neighborhood_analysis/nb_sweep_300x100/violin_spatial_metrics.png}
   \caption{Step 3: per-simulation violin plots for spatial metrics (tumor size, border size, spatial variance; lower is better), with one column per step length. This view complements mean trends by explicitly showing variability and tail risk as a function of neighborhood size.}
@@ -230,10 +236,10 @@ To summarize how performance changes with neighborhood size in a compact way, we
 In particular, we report fold change between a reference neighborhood (here \(NB=3\), used as a normalization point in the sweep) and a larger neighborhood (here \(NB=7\)).
 This is useful because in several metrics the main effect is the jump from \(NB=1\) to \(NB\ge2\), while differences among \(NB\ge2\) are smaller and may depend on the metric.
 
-\begin{figure}[t]
+\begin{figure}[H]
   \centering
   \includegraphics[width=\textwidth]{figs/neighborhood_analysis/nb_sweep_300x100/trend_foldchange_nb7_over_nb3.png}
-  \caption{Step 3: trend analysis via fold change from \(NB=3\) to \(NB=7\) (ratio \(\\text{metric}(NB=7)/\\text{metric}(NB=3)\)). Values below 1 indicate improvement when increasing neighborhood size from 3 to 7, while values above 1 indicate degradation.}
+  \caption{Step 3: trend analysis via fold change from \(NB=3\) to \(NB=7\) (ratio \(\mathrm{metric}(NB=7)/\mathrm{metric}(NB=3)\)). Values below 1 indicate improvement when increasing neighborhood size from 3 to 7, while values above 1 indicate degradation.}
   \label{fig:impl:step3:trend:foldchange}
 \end{figure}
 
@@ -245,28 +251,28 @@ This is useful because in several metrics the main effect is the jump from \(NB=
 Mean values alone can hide important instability: per-simulation distributions often show heavy tails where a non-trivial fraction of runs ends in poor outcomes (``failure modes'').
 To quantify this, we define a \emph{bad-rate} as follows: for each metric and each (model, step length), we select the neighborhood size with the best median performance, take the 95th percentile of that best distribution as a threshold, and compute for each \(NB\) the probability that a run exceeds this threshold.
 
-\begin{figure}[t]
+\begin{figure}[H]
   \centering
   \includegraphics[width=\textwidth]{figs/neighborhood_analysis/nb_sweep_300x100/badrate_bars_KL_Divergence.png}
   \caption{Step 3: bad-rate for KL divergence across neighborhood sizes (lower is better). Each bar reports the fraction of per-simulation runs whose KL exceeds the 95th percentile of the best-performing neighborhood for that (model, step length), highlighting robustness differences not visible in means alone.}
   \label{fig:impl:step3:badrate:kl}
 \end{figure}
 
-\begin{figure}[t]
+\begin{figure}[H]
   \centering
   \includegraphics[width=\textwidth]{figs/neighborhood_analysis/nb_sweep_300x100/badrate_bars_Tumor_Size_Diff.png}
   \caption{Step 3: bad-rate for tumor size error (lower is better). Larger neighborhoods generally reduce the probability of severe failures for coarse morphology, especially for the stochastic variant.}
   \label{fig:impl:step3:badrate:tumor}
 \end{figure}
 
-\begin{figure}[t]
+\begin{figure}[H]
   \centering
   \includegraphics[width=\textwidth]{figs/neighborhood_analysis/nb_sweep_300x100/badrate_bars_Border_Size_Diff.png}
   \caption{Step 3: bad-rate for border size error (lower is better). Border-related fidelity exhibits a trade-off: some intermediate neighborhood sizes may show heavier tails, indicating a higher chance of producing unrealistic borders even if the median performance is competitive.}
   \label{fig:impl:step3:badrate:border}
 \end{figure}
 
-\begin{figure}[t]
+\begin{figure}[H]
   \centering
   \includegraphics[width=\textwidth]{figs/neighborhood_analysis/nb_sweep_300x100/badrate_bars_Spatial_Variance_Diff.png}
   \caption{Step 3: bad-rate for spatial variance error (lower is better). Spatial variance is particularly sensitive to step length and neighborhood size, showing that increasing \(NB\) can change both typical behavior and stability of the dynamics.}
@@ -283,14 +289,14 @@ In the explored range \(NB\in[1,7]\), the measured runtime remains approximately
 Empirically, Mixture NCA runs at about \(\sim 1.5\) ms/step on average, while the Stochastic Mixture variant is about \(\sim 3.2\) ms/step, with limited variation across neighborhood size.
 This suggests that in this implementation range the practical cost is dominated by constants and vectorization effects rather than by the naive theoretical \(O(NB^2)\) scaling.
 
-\begin{figure}[t]
+\begin{figure}[H]
   \centering
   \includegraphics[width=0.85\textwidth]{figs/neighborhood_analysis/nb_sweep_300x100/computational_complexity_time_per_step.png}
   \caption{Step 3: empirical computational cost vs neighborhood size for Mixture and Stochastic Mixture NCA, shown as time per simulation step (ms). Error bars are derived from repeated timing runs.}
   \label{fig:impl:step3:complexity}
 \end{figure}
 
-\begin{figure}[t]
+\begin{figure}[H]
   \centering
   \includegraphics[width=0.85\textwidth]{figs/neighborhood_analysis/nb_sweep_300x100/computational_complexity_normalized_vs_theory.png}
   \caption{Step 3: normalized runtime compared to a theoretical \(NB^2\) scaling. The observed normalized time (relative to \(NB=3\)) stays close to 1.0 and does not increase proportionally to \(NB^2\) in this range.}
@@ -301,7 +307,7 @@ Finally, we analyze how rules are selected over time as a function of neighborho
 To study how specialization evolves during the dynamics, we measure the entropy of the model's rule-assignment distribution \(p(r \mid x_t)\) at each time step, averaged over space and over sampled simulations.
 Low entropy indicates confident (specialized) rule selection, while higher entropy indicates mixed or uncertain rule usage.
 
-\begin{figure}[t]
+\begin{figure}[H]
   \centering
   \includegraphics[width=\textwidth]{figs/neighborhood_analysis/nb_sweep_300x100/rule_entropy_over_time.png}
   \caption{Step 3: rule-assignment entropy over time (in bits), averaged over space and across sampled histories (\(N=20\)), for Mixture NCA and Stochastic Mixture NCA on the 300x100 sweep run. Curves correspond to different neighborhood sizes; the temporal profiles highlight how increasing \(NB\) changes the specialization dynamics and can correlate with stability differences.}
@@ -314,8 +320,10 @@ To complement the time-series view, we also summarize rule specialization with t
 (ii) rule diversity (higher means probability mass is spread over more rules),
 and (iii) max rule usage (the maximum average probability assigned to a single rule; lower means more balanced usage).
 Figure~\ref{fig:impl:step3:rule:summary} reports these indicators and relates them to KL divergence at Step Length \(=100\).
+In our sweep, lower mean entropy at long horizons tends to correlate with better (lower) KL divergence: configurations that commit more confidently to specific rules often achieve a closer match to the ground-truth distribution.
+The relation is not strict---other factors such as the choice of \(NB\) and the evaluation horizon also matter---but it supports the interpretation that stable, specialized rule selection contributes to distributional fidelity when the model is run in free-rollout mode.
 
-\begin{figure}[t]
+\begin{figure}[H]
   \centering
   \includegraphics[width=\textwidth]{figs/neighborhood_analysis/nb_sweep_300x100/rule_specialization_summary.png}
   \caption{Step 3: rule specialization summary statistics across neighborhood sizes for Mixture and Stochastic Mixture NCA. The bottom-right panel relates specialization (entropy) to performance (KL divergence) at Step Length \(=100\).}
@@ -327,14 +335,14 @@ To make rule selection more intuitive, we visualize the \emph{rule-assignment pr
 Each heatmap shows, for each spatial position, how likely the model is to select a given rule.
 Figures~\ref{fig:impl:step3:rule:maps:mix} and~\ref{fig:impl:step3:rule:maps:stoch} show examples for selected neighborhood sizes (including small and large \(NB\)).
 
-\begin{figure}[t]
+\begin{figure}[H]
   \centering
   \includegraphics[width=\textwidth]{figs/neighborhood_analysis/nb_sweep_300x100/rule_assignment_maps_mixture.png}
   \caption{Step 3: illustrative rule assignment probability maps for Mixture NCA (one example state). Columns show the input state and the five rule probability maps. Rows correspond to selected neighborhood sizes.}
   \label{fig:impl:step3:rule:maps:mix}
 \end{figure}
 
-\begin{figure}[t]
+\begin{figure}[H]
   \centering
   \includegraphics[width=\textwidth]{figs/neighborhood_analysis/nb_sweep_300x100/rule_assignment_maps_stochastic.png}
   \caption{Step 3: illustrative rule assignment probability maps for Stochastic Mixture NCA (one example state). The stochastic variant can exhibit different specialization patterns even when average performance is similar.}
@@ -347,6 +355,305 @@ Figures~\ref{fig:impl:step3:rule:maps:mix} and~\ref{fig:impl:step3:rule:maps:sto
 %----------------------------------------------------------
 
 Finally, we add a lightweight statistical check to verify that the observed differences across neighborhood sizes are not explained only by noise.
-Because per-simulation metric distributions can be heavy-tailed and not obviously Gaussian, we use non-parametric tests: an overall Kruskal--Wallis test across \(NB\in\{1,\dots,7\}\), followed by post-hoc Mann--Whitney U tests comparing each \(NB\ge2\) against \(NB=1\), with Holm correction within each metric.
+This subsection explains what these tests are for, what they compute, and why we use non-parametric rather than parametric tests.
+
+\paragraph{What they are for.}
+The goal is to assess whether the differences in the six biological metrics across \(NB\in\{1,\dots,7\}\) are \emph{statistically significant}---i.e., unlikely to be due to random variation in the finite set of simulations.
+Comparing against \(NB=1\) is not informative: \(NB=1\) is trivially inadequate (the model sees only the cell itself), so any \(NB\ge2\) would appear significantly better.
+We therefore use two baselines, \(NB=2\) and \(NB=3\), and ask: ``Do we have enough evidence that larger neighborhood sizes perform differently from each baseline?'' This answers whether increasing the neighborhood beyond the minimal reasonable choice (\(NB=2\)) or beyond a common reference (\(NB=3\)) yields a measurable effect, and keeps conclusions robust to the choice of reference.
+
+\paragraph{What they compute.}
+We use two tests in sequence.
+\begin{itemize}
+  \item \textbf{Kruskal--Wallis} (overall test): it ranks all observations (across all \(NB\)) for each metric, then tests whether the \emph{rank distributions} differ across the seven groups.
+  It produces a \(p\)-value: if \(p\) is small (e.g.\ \(<0.05\)), we reject the null hypothesis that all \(NB\) groups have the same distribution of the metric; in other words, at least one neighborhood size behaves differently.
+  It does \emph{not} assume normality; it only uses the ranks, so it is robust to outliers and heavy tails.
+  \item \textbf{Mann--Whitney U} (post-hoc pairwise): once Kruskal--Wallis indicates that groups differ, we compare (separately) each \(NB>2\) to the baseline \(NB=2\), and each \(NB>3\) to the baseline \(NB=3\) (we do \emph{not} compare against \(NB=1\)).
+  For each pair, the test ranks the pooled observations and computes a statistic from the sum of ranks of one group; the \(p\)-value tells us whether the two groups are drawn from the same distribution.
+  We apply \textbf{Holm correction} within each baseline (five comparisons for vs.\ \(NB=2\), four for vs.\ \(NB=3\)) to control the family-wise error rate.
+\end{itemize}
+So, in short: Kruskal--Wallis tells us ``there is some difference among \(NB\)''; Mann--Whitney with Holm tells us ``which of the larger \(NB\) are significantly different from \(NB=2\) and from \(NB=3\)'' for each metric (see \cref{tab:impl:step3:stats}).
+
+\paragraph{Why non-parametric.}
+Parametric tests (e.g.\ one-way ANOVA and \(t\)-tests) assume that the metric values are drawn from a normal (Gaussian) distribution, or at least that the sample means are approximately normal by the central limit theorem.
+In our setting, the per-simulation metrics (e.g.\ KL divergence, Chi-square) often have \emph{heavy-tailed} distributions: a few simulations can yield very large values, and the distributions are not obviously Gaussian.
+Under these conditions, parametric tests can be anticonservative (too many false positives) or have unreliable \(p\)-values.
+Non-parametric tests avoid distributional assumptions by working on \emph{ranks} instead of raw values: they only use the ordering of the data, so they are valid for any continuous distribution and are robust to outliers and skewness.
+That is why we report Kruskal--Wallis and Mann--Whitney U rather than ANOVA and \(t\)-tests.
 
 \input{tables/step3_stats_tests.tex}
+
+\paragraph{Interpretation and comparison of the two baselines.}
+The Kruskal--Wallis \(p\)-values are below \(10^{-4}\) for all metrics and both models, so we have strong evidence that neighborhood size affects the distribution of each metric.
+Comparing the two baseline columns reinforces and refines this conclusion.
+
+\emph{Vs.\ \(NB=2\):} For the Mixture model, every metric lists \(NB=3,4,5,6,7\) as significant---i.e.\ even the first step beyond the minimum (\(NB=3\)) is distinguishable from \(NB=2\).
+For the Stochastic model, the same holds for most metrics; exceptions are Border Size Diff (only \(4,5,6,7\): \(NB=3\) is not significantly different from \(NB=2\)) and, for Categorical MMD and Tumor Size Diff, \(NB=6\) is not in the significant set, so for those metrics \(NB=6\) is not clearly better than \(NB=2\).
+
+\emph{Vs.\ \(NB=3\):} Here we only compare \(NB=4,5,6,7\) to \(NB=3\), so the column never contains 3.
+For the Mixture model, Categorical MMD gives only \(4,5,6\) (so \(NB=7\) is not significantly different from \(NB=3\) for that metric); for all other metrics, \(4,5,6,7\) are significant vs.\ \(NB=3\).
+For the Stochastic model, Spatial Variance Diff gives only \(4,5,7\) (so \(NB=6\) is not significantly different from \(NB=3\)), while Categorical MMD and Tumor Size Diff list \(4,5,6,7\) and Border Size Diff \(4,5,6,7\).
+
+\emph{Takeaway:} The two baselines tell a consistent story: the effect of \(NB\) is statistically significant and not due to noise; going from \(NB=2\) to \(NB=3\) often (but not always, e.g.\ Stochastic Border Size) matters; beyond \(NB=3\), which of \(NB=4,5,6,7\) differ from the reference depends on the metric and the model.
+So the ``best'' neighborhood size is metric- and model-dependent, and the tests with both baselines support the same overall message while making the dependence on the reference explicit.
+
+%----------------------------------------------------------
+\section{Curriculum learning experiment: setting and results}
+\label{sec:impl:curriculum}
+%----------------------------------------------------------
+
+In the controlled sweep (Step 3) we saw that neighborhood size matters when we train on 300 trajectories of 100 steps and evaluate at 25, 50, and 100 steps.
+We then asked: does the same hold when we train on longer trajectories (500 steps) using a curriculum?
+This section describes that second experiment: what we did, how we evaluate the models, and what we see in the metrics and in the qualitative figures.
+We also explain an important distinction---\emph{teacher forcing} during training vs.\ \emph{free rollouts} at evaluation---because it is the main reason why the model can look good on the training loss but still drift away from the ground truth when we run it for many steps.
+
+\subsection{Why we ran this experiment}
+\label{sec:impl:curriculum:rationale}
+
+Step 3 used 300 trajectories of 100 steps and showed that \(NB\ge2\) helps and that the choice of \(NB\) matters at 25, 50, and 100 steps.
+That experiment, however, does not tell us whether the same conclusions still hold when we train the model to match dynamics over 500 steps and then evaluate it at 25, 100, and 500 steps.
+So we ran a separate experiment: 300 trajectories of 500 time steps each, with training split into three phases (short windows first, then longer ones).
+The goal is to check that the neighborhood-size effect is not limited to the 100-step setting---that it carries over to the long-horizon regime we care about for tissue regeneration.
+We also use the same six biological metrics as in Step 3, so we can compare the two experiments and see how the metrics change when we increase the evaluation step length (25, 100, or 500).
+
+\subsection{Data and train/validation split}
+\label{sec:impl:curriculum:data}
+
+We use \textbf{300 simulated tissue-growth trajectories}, each of \textbf{500 time steps}, from the same complex tissue model as elsewhere in this thesis (see \cref{sec:impl:data}).
+Each trajectory is a sequence of 2D grids of cell types (one-hot encoded for training).
+We split the 300 histories into 80\% for training (240 trajectories) and 20\% for validation (60 trajectories), and we keep this split fixed.
+Training is done only on the 240 training histories; when we report results, we run evaluation on all 300 (training and validation together) so that the comparison across neighborhood sizes and step lengths is fair and on the same set of initial conditions.
+Before training we check that the loaded histories contain no NaN or Inf, to avoid numerical issues.
+
+\subsection{Curriculum schedule and training protocol}
+\label{sec:impl:curriculum:schedule}
+
+We train in \textbf{three phases}, each with a longer time window.
+The idea is to start with short windows (cheap to train) and then move to longer ones, so the model first learns short-term dynamics and then refines them on 500-step windows without paying the full cost of long backpropagation from the very beginning.
+
+\begin{itemize}
+\item \textbf{Phase 1:} windows of 35 steps, 250 epochs, learning rate \(0.0005\), update every 1 step. The loss is computed at every step inside the window.
+\item \textbf{Phase 2:} windows of 100 steps, 150 epochs, learning rate \(0.0005\), update every 1 step.
+\item \textbf{Phase 3:} windows of 500 steps, 90 epochs, learning rate \(0.0001\), update every 2 steps.
+\end{itemize}
+
+In each phase we use early stopping on the training loss (we stop if there is no improvement for 20 epochs and then restore the best weights of that phase).
+The loss is mean squared error on the one-hot state; we compute it at every step in the window, not only at the last step, so the model gets a learning signal from all intermediate states.
+We train only the \textbf{Mixture NCA} and the \textbf{Stochastic Mixture NCA}; we skip the Standard NCA and the NCA with noise.
+For each neighborhood size we save a checkpoint at the end of each phase and a final checkpoint that we use for all evaluation below.
+
+We do \emph{not} compute a validation loss during training: the 60 validation histories are never used in the training loop.
+We only use the training loss for early stopping.
+So we cannot see a train--validation gap to detect overfitting; we keep the pipeline simple and avoid an extra pass over the validation set at every epoch.
+After training we judge the model by running the evaluation protocol (free rollouts at 25, 100, and 500 steps on all 300 histories and computing the six biological metrics); those metrics are not used to choose or stop the model, only to report and compare.
+
+\subsection{Teacher forcing vs.\ free rollout: what changes and why it matters}
+\label{sec:impl:curriculum:teacher_vs_free}
+
+During training we use \emph{teacher forcing}.
+That means: when we compute the loss for a window of, say, 35 steps, we feed the model the \emph{true} state from the dataset at each step.
+Step 0: we give the model the true initial state \(x_0\), it predicts \(\hat{x}_1\).
+Step 1: we give the model the \emph{true} \(x_1\) (not \(\hat{x}_1\)), it predicts \(\hat{x}_2\).
+And so on.
+So at every step the model sees the correct previous state; its errors are not fed back.
+The loss is the mismatch between its predictions and the true next states, and we backpropagate through the whole window.
+This is efficient and gives a strong learning signal, but the model never practices recovering from its own mistakes.
+
+During evaluation we use \emph{free rollouts} (no teacher forcing).
+We take an initial state \(x_0\) from the dataset and we run the model for 25, 100, or 500 steps.
+Step 0: we give \(x_0\), the model outputs \(\hat{x}_1\).
+Step 1: we give \emph{\(\hat{x}_1\)} (the model's own prediction), it outputs \(\hat{x}_2\).
+Step 2: we give \(\hat{x}_2\), and so on.
+So the model never sees the true state again after \(x_0\); it only sees its own predictions.
+If it makes a small error at step 10, that error is the input for step 11, and the error can grow over time.
+After hundreds of steps, the generated tissue can look quite different from the ground truth even if the training loss was low.
+
+The difference between the two regimes is intentional.
+At evaluation we want to answer: given only an initial condition, as in real use, can the model produce a good trajectory?
+We do not have access to the true states along the way, so the only meaningful test is to run the model on its own; that is exactly what a free rollout does.
+Using teacher forcing at evaluation would mean feeding the model the ground truth at every step, which would not reflect any realistic scenario and would make the metrics overly optimistic.
+
+During training, we could in principle also use free rollouts: unroll the model for many steps, feed it its own predictions, and backpropagate through the whole trajectory.
+That would train the model in the same regime as evaluation and could reduce the gap.
+In practice, however, training with long free rollouts is more expensive and less stable: gradients must flow through hundreds of steps, and optimization becomes harder.
+Teacher forcing avoids that by giving a clean, step-by-step signal and is the standard choice for sequence and trajectory models.
+The downside is that the model never learns to correct its own errors; this train--eval mismatch is often called \emph{exposure bias}.
+A possible compromise is \emph{scheduled teacher forcing}: start with full teacher forcing and gradually feed the true state less often during training, so the model learns to cope with its own predictions.
+We do not use that here; we keep the pipeline simple and accept that part of the gap at long times comes from this design choice.
+When we report metrics and show qualitative figures, we always use free rollouts, so the numbers and images reflect the real use case.
+
+\subsection{Models and evaluation protocol}
+\label{sec:impl:curriculum:models}
+
+The model architectures (Mixture NCA and Stochastic Mixture NCA) are introduced in \cref{sec:sota:mnca}.
+Here we use the same setup as elsewhere in the thesis: extended neighborhood, 6 state channels (one per cell type), 5 mixture rules, hidden size 128.
+We train and evaluate only for \(NB \in \{2, 3, 5\}\) to keep the experiment manageable while still covering a range of neighborhood sizes.
+
+At evaluation we run \textbf{free rollouts} (as just described): from each initial state we unroll the model for 25, 100, or 500 steps with no teacher forcing, and we compute the six biological metrics (KL divergence, Chi-square, categorical MMD, tumor size difference, border size difference, spatial variance difference) by comparing the \emph{final} generated state to the ground-truth state at the same step.
+For the Stochastic Mixture NCA we use hard rule sampling (multinomial sampling at each step), and we run 10 rollouts per initial condition (different random seeds) and report the mean and standard deviation of the metrics.
+We use the same sampling and temperature choices as in Step 3 so that the results are comparable.
+
+\subsection{Qualitative examples: three simulations, three neighborhood sizes}
+\label{sec:impl:curriculum:qualitative}
+
+To see how the curriculum-trained models behave in practice, we pick \textbf{three simulations} (Sim~0, Sim~149, Sim~299) and compare the ground truth with the Mixture NCA and the Stochastic Mixture NCA for \(NB=2\), \(NB=3\), and \(NB=5\) at four time points: \(t=10\), \(t=50\), \(t=100\), and \(t=500\).
+The figures are produced by a script that loads the same histories and checkpoints as the interactive Streamlit app; for both models we run a single free rollout of 500 steps and take the frames at those four times, so what you see is one continuous trajectory (no teacher forcing).
+For each neighborhood size we show three rows (ground truth, Mixture NCA, Stochastic Mixture NCA) and four columns (one per time point); the layout is split by \(NB\) (Figures~\ref{fig:impl:curriculum:ex_nb2}--\ref{fig:impl:curriculum:ex_nb5}).
+The same initial state is used per simulation for all three rows, so the comparison is fair.
+
+\paragraph{Ground truth.}
+The simulator produces robust, organic growth: small clusters at \(t=10\) expand into intricate, irregular or branching structures by \(t=500\), with clear boundaries between cell types and controlled, localized growth that does not fill the grid.
+
+\paragraph{Mixture NCA (deterministic).}
+At \(t=10\) the Mixture NCA often resembles the ground truth, in line with the first curriculum phase (35-step windows).
+From \(t=50\) onward, however, it diverges sharply: it exhibits \emph{aggressive, uncontrolled expansion}, rapidly filling a large portion of the grid with blocky, often homogeneous regions (dominantly green and purple), and loses the fine internal structure and sharp boundaries of the ground truth.
+This behavior is consistent across \(NB=2\), \(NB=3\), and \(NB=5\): the deterministic mixture fails to maintain localized complexity and instead tends toward large-scale, artificial-looking growth.
+
+\paragraph{Stochastic Mixture NCA.}
+At \(t=10\) the stochastic variant also tracks the ground truth well.
+Over time it performs \emph{noticeably better} than the deterministic Mixture NCA: it keeps the overall scale and footprint of the patterns closer to the ground truth, avoids the runaway expansion, and preserves more organic shapes and irregular boundaries.
+For \(NB=3\) and \(NB=5\) (Figures~\ref{fig:impl:curriculum:ex_nb3}--\ref{fig:impl:curriculum:ex_nb5}), the qualitative agreement with the ground truth at \(t=50\), \(t=100\), and \(t=500\) is strong---growth remains controlled and morphologies are close to the target.
+For \(NB=2\) (Figure~\ref{fig:impl:curriculum:ex_nb2}), stochasticity still improves containment and scale, but the internal structure can appear noisier or less sharply defined than the ground truth, and fine-grained cell-type segregation is only partly reproduced.
+In summary, the stochastic component is crucial for stable, morphologically plausible long-horizon behavior and aligns with the better distributional metrics we report for the stochastic model at larger \(NB\) and longer step lengths.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{figs/curriculum/curriculum_examples_NB2.png}
+  \caption{Curriculum experiment, \(NB=2\): ground truth vs.\ Mixture NCA vs.\ Stochastic Mixture NCA for three simulations at \(t=10,50,100,500\). Same initial state per simulation for all rows.}
+  \label{fig:impl:curriculum:ex_nb2}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{figs/curriculum/curriculum_examples_NB3.png}
+  \caption{Curriculum experiment, \(NB=3\): same layout as Figure~\ref{fig:impl:curriculum:ex_nb2}.}
+  \label{fig:impl:curriculum:ex_nb3}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{figs/curriculum/curriculum_examples_NB5.png}
+  \caption{Curriculum experiment, \(NB=5\): same layout as Figure~\ref{fig:impl:curriculum:ex_nb2}.}
+  \label{fig:impl:curriculum:ex_nb5}
+\end{figure}
+
+\subsection{Metric results and interpretation}
+\label{sec:impl:curriculum:metrics}
+
+After training we run the evaluation protocol (free rollouts at 25, 100, and 500 steps) for each combination of neighborhood size and step length, and we record the six biological metrics.
+Figure~\ref{fig:impl:curriculum:dashboard} reports the \emph{mean} of each metric over the three step lengths (25, 100, 500) for each neighborhood size and each model; Table~\ref{tab:impl:curriculum:metrics_summary} summarizes which configuration is best per metric and explains the contrast between metric types.
+
+\paragraph{Distributional metrics (KL divergence, Chi-square, categorical MMD).}
+These metrics measure how closely the \emph{global statistical distribution} of cell states (or derived counts) in the generated pattern matches the ground truth---e.g., proportions of cell types, overall composition.
+On all three, \textbf{Stochastic Mixture NCA} clearly outperforms Mixture NCA, and the gap widens as \(NB\) increases: at \(NB=5\) the stochastic model attains the lowest values (e.g., KL and Chi-square roughly halved or better vs.\ the deterministic one; categorical MMD much lower at \(NB=5\)).
+The deterministic Mixture NCA improves from \(NB=2\) to \(NB=3\) but then plateaus or slightly degrades (e.g., Chi-square and categorical MMD rise again from \(NB=3\) to \(NB=5\)), as if the larger receptive field does not help it further for distributional fidelity.
+The stochastic variant, by contrast, benefits consistently from a larger neighborhood: it can explore the state space more and, with more context, better approximate the target distribution.
+
+\paragraph{Spatial metrics (tumor size diff, border size diff, spatial variance diff).}
+These metrics measure \emph{geometric and structural} accuracy: size of the active region, extent of boundaries, and spatial clustering or dispersion.
+Here the picture is more nuanced and the two models behave differently.
+\textbf{Mixture NCA} often performs best at \textbf{\(NB=3\)} for border size and spatial variance: the deterministic rule, with a moderate neighborhood, can form stable local structures and sharp boundaries without the extra variability that stochasticity introduces.
+\textbf{Stochastic Mixture NCA} exhibits a pronounced \emph{peak in error at \(NB=3\)} on border size and spatial variance (worse than at \(NB=2\) or \(NB=5\)), suggesting that at this scale the randomness interferes with precise spatial coherence.
+At \textbf{\(NB=5\)}, the stochastic model recovers: it improves on tumor size diff, border size diff, and spatial variance diff, and at \(NB=5\) often matches or beats the deterministic model on these spatial metrics, while the deterministic one can degrade (e.g., spatial variance diff rises from \(NB=3\) to \(NB=5\)).
+At \(NB=2\), Mixture NCA sometimes has an edge on spatial metrics (e.g., tumor size diff), but both models are less stable at long horizons when \(NB\) is small.
+
+\paragraph{Why distributional and spatial metrics give different results.}
+Distributional metrics aggregate over the whole pattern and reward a good match of \emph{overall} counts and proportions; they benefit from the stochastic model's ability to explore and from a larger receptive field (\(NB=5\)), which provides more context for consistent long-horizon behavior.
+Spatial metrics, in contrast, are sensitive to \emph{local} geometry: sharp borders, coherent regions, and stable spatial arrangement.
+Stochasticity can help globally but add local ``noise'' or blurring, which hurts border and spatial-variance accuracy at an intermediate scale (\(NB=3\)); the deterministic model, with no sampling noise, can excel at that scale for structure.
+When \(NB\) is increased to 5, the stochastic model gains enough context to stabilize its spatial behavior (or the randomness averages out better), so it recovers and often surpasses the deterministic one even on spatial metrics.
+Hence there is no single ``best'' \(NB\) or model for all metrics: the choice depends on whether one prioritizes distributional agreement (favor Stochastic Mixture NCA and \(NB=5\)) or fine-grained spatial fidelity at a given scale (where \(NB=3\) can be best for the deterministic model, and \(NB=5\) for the stochastic one).
+
+\paragraph{How the metrics change with step length.}
+We evaluate at 25, 100, and 500 steps to see how performance changes as the rollout gets longer.
+At \textbf{25 steps} we are close to what the model saw in the first curriculum phase (35-step windows), so errors stay low and the difference between \(NB=2\), \(NB=3\), and \(NB=5\) is small.
+At \textbf{100} and \textbf{500 steps} the metrics generally worsen and the receptive field matters more: distributional metrics are clearly best for \(NB=5\), especially for the stochastic model; spatial metrics show the trade-offs described above (e.g., Mixture NCA best at \(NB=3\) for some, Stochastic best at \(NB=5\) after recovering from the \(NB=3\) peak).
+Figure~\ref{fig:impl:curriculum:categorical_mmd} breaks out categorical MMD by step length; the dashboard (Figure~\ref{fig:impl:curriculum:dashboard}) averages over step lengths and gives the overall picture.
+
+\paragraph{Comparison with Step 3.}
+In Step 3 we had 300 trajectories of 100 steps, no curriculum, and we evaluated at 25, 50, and 100 steps with \(NB\) from 1 to 7.
+Here we have 300 trajectories of 500 steps, a three-phase curriculum (35, 100, 500), and we evaluate at 25, 100, and 500 steps with \(NB \in \{2,3,5\}\).
+The conclusions match: in both experiments, larger neighborhoods help on distributional metrics at longer horizons, and no single \(NB\) is best on every metric.
+Step 3 showed that \(NB=1\) is too small and that \(NB\ge2\) gives a clear improvement; this curriculum run shows that among 2, 3, and 5, the larger one (\(NB=5\)) is better at 100 and 500 steps, especially for the stochastic model.
+We use the same six metrics in both experiments, so the comparison is fair; the curriculum experiment simply pushes the evaluation horizon to 500 steps and confirms that the neighborhood-size effect is still there.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{figs/curriculum/curriculum_dashboard.png}
+  \caption{Curriculum experiment: mean metric values vs.\ neighborhood size, averaged over evaluation step lengths. Each panel is one of the six biological metrics; lower is better. Top row: distributional metrics; bottom row: spatial metrics.}
+  \label{fig:impl:curriculum:dashboard}
+\end{figure}
+
+\input{tables/curriculum_metrics_summary.tex}
+
+\paragraph{Why we see these values.}
+The model is trained on windows of 35, 100, and 500 steps, so it learns to match the data over longer and longer horizons.
+But at evaluation we use free rollouts: the model has to stay coherent for 25, 100, or 500 steps without ever seeing the true state again after the start.
+Short rollouts (25 steps) are close to the first training phase, so all three neighborhood sizes do well and the gap between them is small.
+
+When we go to 100 and 500 steps, errors build up and the receptive field matters more: a larger neighborhood (\(NB=5\)) gives the update rule more context, which helps keep the tissue consistent (hence better KL and Chi-square) and, for the stochastic model, keeps rule choices more stable over time (hence the clearer win for \(NB=5\) at long horizons).
+The deterministic Mixture NCA mixes rules in a soft way, so it is less sensitive to sampling noise but can still drift over long rollouts; depending on the metric and the horizon, we sometimes see \(NB=3\) best for border or spatial variance and \(NB=5\) best for KL and categorical MMD.
+
+Figure~\ref{fig:impl:curriculum:categorical_mmd} zooms in on categorical MMD as we change neighborhood size and step length.
+At \textbf{25 steps} both models achieve low MMD for all \(NB\); the curve is often U-shaped with a minimum at \(NB=3\) for Mixture NCA, and similar for the stochastic variant.
+At \textbf{100} and \textbf{500 steps} the two models diverge: \textbf{Stochastic Mixture NCA} shows a monotonic decrease in MMD as \(NB\) increases, reaching the lowest values at \(NB=5\) (around 0.04--0.05), whereas \textbf{Mixture NCA} again exhibits a U-shaped trend with minimum at \(NB=3\) and a rise at \(NB=5\) (especially at 500 steps).
+So for this distributional metric at long horizons, the stochastic model benefits consistently from a larger receptive field, while the deterministic one does not improve beyond \(NB=3\) and can even degrade---consistent with the dashboard and with the interpretation that stochasticity plus context (\(NB=5\)) yields better global distributional match.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{figs/curriculum/curriculum_metric_vs_nb_categorical_mmd.png}
+  \caption{Curriculum experiment: categorical MMD vs.\ neighborhood size, one panel per evaluation step length (25, 100, 500). Top row: Mixture NCA; bottom row: Stochastic Mixture NCA. Lower is better. The stochastic variant decreases monotonically with \(NB\) at 100 and 500 steps; the deterministic one is U-shaped with minimum at \(NB=3\).}
+  \label{fig:impl:curriculum:categorical_mmd}
+\end{figure}
+
+The training loss curves (Figure~\ref{fig:impl:curriculum:loss}) show that both models converge quickly: on a linear scale the loss drops to values near zero within the first phase and the three neighborhood sizes are almost indistinguishable.
+Figure~\ref{fig:impl:curriculum:loss_log} plots the same data on a log scale so that the initial drop (by several orders of magnitude) and small differences are visible.
+On the log scale we see sharp \emph{spikes} at curriculum phase transitions (e.g., when the window length or learning rate changes): the loss jumps up briefly then returns to a low plateau.
+The Stochastic Mixture NCA tends to show more frequent and sometimes higher spikes than the deterministic model in the early phases, likely because sampling introduces extra variability when the task changes.
+Around step 100 (concatenated) there is a clear jump to a slightly higher plateau for all \(NB\); \(NB=2\) settles at a marginally higher loss than \(NB=3\) and \(NB=5\) for both models.
+Importantly, training loss is computed with teacher forcing, so it does not reflect long-horizon free-rollout behavior; the real differences across \(NB\) and between models show up at evaluation (Figures~\ref{fig:impl:curriculum:dashboard} and \ref{fig:impl:curriculum:categorical_mmd}).
+We do not compute a validation loss in this run; early stopping uses only the training loss (patience 20 epochs per phase).
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{figs/curriculum/curriculum_loss_curves.png}
+  \caption{Curriculum experiment: training loss (linear scale) over the concatenated curriculum phases for Mixture NCA (left) and Stochastic Mixture NCA (right). Each line is one neighborhood size (\(NB=2,3,5\)). The loss drops quickly to values near zero; see Figure~\ref{fig:impl:curriculum:loss_log} for a log-scale view.}
+  \label{fig:impl:curriculum:loss}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{figs/curriculum/curriculum_loss_curves_log.png}
+  \caption{Curriculum experiment: same training loss as Figure~\ref{fig:impl:curriculum:loss} with log-scale y-axis. Spikes correspond to curriculum phase transitions; \(NB=2\) settles at a slightly higher plateau than \(NB=3\) and \(NB=5\). Validation loss was not computed in this run.}
+  \label{fig:impl:curriculum:loss_log}
+\end{figure}
+
+\subsection{Why generated images differ from ground truth and possible improvements}
+\label{sec:impl:curriculum:limitations}
+
+When we look at the qualitative figures (Figures~\ref{fig:impl:curriculum:ex_nb2}--\ref{fig:impl:curriculum:ex_nb5}), we see that the stochastic variant stays close to the ground truth for \(NB=3\) and \(NB=5\) at all time points, with controlled growth and organic shapes; at \(NB=2\) it still keeps the right scale but the internal structure can look noisier.
+The deterministic Mixture NCA, on the other hand, matches the ground truth only early on (around \(t=10\)). As time goes on it starts to diverge: the pattern expands in an uncontrolled way, becomes blocky and homogeneous, and by \(t=500\) the generated tissue often has a different layout, a different mix of cell types, and a tendency to fill the grid instead of evolving like the simulator.
+It is natural to ask why this happens and what could be done about it.
+
+Several factors contribute.
+During training we use teacher forcing: at every step we feed the model the true state from the dataset, so small errors do not accumulate and the loss can stay low.
+At evaluation we do the opposite: we run free rollouts, where the model only sees its own previous output. In that regime, a small mistake at step 10 is fed into step 11, and the error can grow over time. By step 500 the trajectory may have drifted far from the ground truth even if the model had learned the short-term dynamics well.
+A second point is what we actually optimize: the loss is a step-by-step mean squared error over the training window, which encourages correct one-step predictions but does not directly reward how well a long unrolled trajectory matches a single ground-truth run.
+For the stochastic model there is an extra nuance: at each step we sample a rule, so different random seeds produce different trajectories; the ground truth we compare against is just one possible realization of the simulator, and part of the ``difference'' we see is therefore normal variability between runs, not only a failure of the model.
+Finally, the last curriculum phase uses 500-step windows but with fewer epochs and a smaller learning rate, so we may stop before the model has fully learned to stay on track for the full 500 steps.
+
+Several directions could be explored to reduce the gap at long times (see also \cref{sec:conc:future}): training longer on 500-step windows or adding more curriculum phases; computing a validation loss with free rollouts and using it for early stopping; adding losses that target the final state of a rollout; or using scheduled teacher forcing so that during training the model gradually sees the true state less often. At evaluation, running multiple rollouts and averaging or selecting among them could improve the metrics. We leave these ideas for future work. The current experiment already shows that the neighborhood-size effect carries over to the long-horizon curriculum setting and that a larger \(NB\) helps at 100 and 500 steps, especially for the stochastic model.
+
+In summary, the curriculum run confirms what we saw in Step 3: when we train on 500-step trajectories with a phased curriculum, a larger neighborhood still helps, in particular at long evaluation horizons and for the stochastic variant, while the deterministic one exhibits a more mixed trade-off across metrics and horizons. A short takeaway is in \cref{sec:results:takeaway}.
+
+%----------------------------------------------------------
+\section{Threats to validity}
+\label{sec:impl:threats}
+%----------------------------------------------------------
+
+The conclusions of this chapter are subject to several limitations that are worth stating explicitly.
+First, all experiments rely on a \emph{synthetic} tissue simulator with fixed parameters (cell types, differentiation rules, grid size); the effect of neighborhood size may depend on these choices and may not transfer unchanged to real biological data or to other toy models.
+Second, the datasets used are of moderate size (300 trajectories of 100 or 500 steps); larger or more diverse datasets could alter the relative performance of different \(NB\) values.
+Third, the neighborhood size is varied only in the range \(NB \in \{1,\dots,7\}\) (or \(\{2,3,5\}\) in the curriculum experiment); we do not claim that the observed trade-offs extend to much larger receptive fields.
+Fourth, in the curriculum experiment we do not compute a validation loss or use free-rollout-based early stopping, so we cannot quantify overfitting; the reported metrics are purely for comparison across configurations, not for model selection.
+Acknowledging these limitations helps interpret the results and suggests directions for more generalizable follow-up work (see \cref{sec:conc:future}).

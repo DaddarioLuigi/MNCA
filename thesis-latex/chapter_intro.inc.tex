@@ -3,264 +3,57 @@
 \label{c:intro}
 %-------------------------------------------------------------------
 
-%
-% toOl: the % symbol can be used for comments like C-style //
-%
-
-\epigraph{\enquote{A design of any kind shows its real value when taking beyond its original limits.}}{\emph{Tom Jennings}}
-
-% -------------------------------------------------------------------
-% Thesis-specific draft (work in progress).
-% NOTE: the original template text below is kept (not deleted) and can be
-% removed once the thesis text is finalized.
-% -------------------------------------------------------------------
+\epigraph{\enquote{A design of any kind shows its real value when taken beyond its original limits.}}{\emph{Tom Jennings}}
 
 %-------------------------------------------------------------------
 \section{Context and motivation}
 \label{sec:intro:context}
 %-------------------------------------------------------------------
 
-This thesis studies computational models that can simulate \emph{tissue-like growth} and organization.
-The general biological motivation is that tissues emerge from many local interactions: cells divide, differentiate, die, and respond to signals coming from their spatial neighborhood.
-Even when the underlying biology is complex, it is often useful to study simplified models that capture the key idea of \emph{local rules leading to global structure}.
+Tissues and other multicellular structures arise from the repeated application of local rules: cells divide, differentiate, migrate, and respond to signals from their immediate neighborhood.
+No single cell holds a global blueprint; instead, large-scale morphology and function emerge from many spatially distributed, short-range interactions.
+Understanding how such local rules give rise to stable patterns and robust growth is a central question in developmental and systems biology, and it has motivated a long tradition of computational models that emphasize locality and discreteness \cite{ca_vonneumann1966,ca_wolfram2002}.
 
-In this introduction, we will add more biological context (e.g., regeneration and pattern formation), and we will motivate why learning-based cellular models are interesting for biology.
-We will also discuss why long-horizon behavior matters: a model should not only match short-term transitions, but also remain stable when it is run freely for many steps.
+This thesis focuses on a class of such models: neural cellular automata \cite{nca_mordvintsev2020} trained to imitate tissue-like dynamics.
+We are interested in whether these models can not only reproduce short-term transitions from data but also maintain coherent, biologically plausible behavior when run autonomously over long horizons.
+In that setting, the choice of how much spatial context each cell uses---the size of its ``neighborhood''---becomes a key design factor.
+We therefore assess Mixture Neural Cellular Automata (MNCA) \cite{mnca_milite2025} in a controlled tissue-growth scenario and ask whether enlarging the neighborhood improves learning and long-horizon stability.
 
 %-------------------------------------------------------------------
 \section{Why cellular automata and neural cellular automata}
 \label{sec:intro:why_ca}
 %-------------------------------------------------------------------
 
-Cellular Automata (CA) are one of the simplest ways to model complex spatial phenomena: a grid of cells, updated by local rules.
-Neural Cellular Automata (NCA) extend this idea by learning the update rule from data, and mixture-based variants introduce multiple rules and stochasticity, which can be useful when modeling biological variability.
+Cellular automata (CA) \cite{ca_vonneumann1966,ca_wolfram2002} provide one of the simplest frameworks for studying emergence from local rules: a discrete grid of cells is updated in parallel according to a fixed rule that depends only on each cell's state and that of its neighbors.
+They have been used for decades to model physical, chemical, and biological phenomena, from pattern formation to morphogenesis, without requiring continuous equations or global coordination.
+This makes them a natural fit when the phenomenon of interest is inherently local and when interpretability and parsimony matter.
 
-A key design choice in these models is the \emph{spatial neighborhood size} (\(NB\)): how far a cell can ``see'' when it updates.
-A larger neighborhood can provide more context and potentially improve stability, but it may also change the inductive bias and increase complexity.
-This motivates our main question: does increasing \(NB\) help MNCA learn better tissue dynamics?
+Neural cellular automata (NCA) \cite{nca_mordvintsev2020} retain the same spatial structure and locality but replace the hand-crafted update rule with a learned one, typically a small neural network that takes the local neighborhood as input.
+Thus, one keeps the inductive bias of ``local rules only'' while gaining the flexibility to discover dynamics from data.
+Mixture variants \cite{mnca_milite2025} go a step further by combining several learned rules with stochasticity, which is well suited to biological systems where variability and multiple cell behaviors are the norm.
+
+An alternative would be to model the same dynamics with generic deep learning: for example, a convolutional or recurrent network that maps full grid states across time.
+Such models can be powerful, but they do not enforce locality by design; the effective receptive field and the way information propagates are less transparent, and long-horizon rollout often suffers from drift or instability.
+By contrast, CA and NCA explicitly encode the prior that only nearby cells influence each other, which aligns with the biological picture and can improve generalization and stability when the training signal is limited or noisy.
+In short, we use cellular automata and neural cellular automata not instead of machine learning, but as a structured, spatially grounded class of models within it---one that trades some flexibility for interpretability, parsimony, and a bias that matches the problem.
 
 %-------------------------------------------------------------------
-\section{Thesis objectives and contributions}
+\section{Objectives of the thesis}
 \label{sec:intro:objectives}
 %-------------------------------------------------------------------
 
-The core objective of this thesis is to evaluate Mixture Neural Cellular Automata (MNCA) in a tissue-growth setting and to understand whether extending the neighborhood is beneficial.
-To do this, we design a set of experiments that progressively improve the training signal and the evaluation protocol, and we report results across multiple neighborhood sizes using both qualitative rollouts and quantitative metrics.
+The main objective of this thesis is to evaluate Mixture Neural Cellular Automata in a tissue-growth setting and to determine whether extending the spatial neighborhood improves their ability to learn and to maintain plausible dynamics over long rollouts.
+To that end, we design a sequence of experiments that progressively refine the training setup and the evaluation protocol.
+We compare multiple neighborhood sizes using both qualitative inspection of rollouts and quantitative metrics, and we discuss how the choice of neighborhood interacts with other factors such as curriculum design and evaluation horizon.
+A secondary aim is to provide a reproducible experimental pipeline and a clear reporting of results, so that the findings can be extended or challenged in future work.
 
 %-------------------------------------------------------------------
-\section{Template notes (kept from the original \LaTeX\ template)}
-\label{sec:intro:template_notes}
-%-------------------------------------------------------------------
-
-Some few conventions (and an example of nested item list):
-
-\begin{itemize}
-\item In a \texttt{.tex} file, text lines can have variable length.
-\item Put a newline after every fullstop, see an example in \cref{s:example_section}; paragraphs are separated by empty lines in the \texttt{tex} file, so a newline at the end of a sentence does not affect the structure of the paragraph.
-\item This is a tradeoff for using versioning tools:
-\begin{itemize}
-\item Lines too long (full paragraphs) would introduce diffs that are too large.
-\item Fixed maximum line widths (e.g., $80$ columns) lead to editors to reorganize the paragraph to fit the width, causing again diffs that are too large.
-\end{itemize}
-\end{itemize}
-%
-You can use the percentage symbol (\%)\footnote{And notice how to insert a symbol of percentage!} to avoid a space between item list and this paragraph, so that the first line of this paragraph is not indented.
-
-Enumerated list:
-
-\begin{enumerate}
-\item Item 1.
-\item Item 2.
-\item Item 3.
-\item Item 4.
-\end{enumerate}
-
-Sometimes, when you have a list of items for which you don't want to use bullet points or enumerations, you can use paragraphs with titles.
-See the following text.
-
-\paragraph{This is the first paragraph.}
-This is the long text of the first paragraph.
-This is the long text of the first paragraph.
-
-\paragraph{This is the second paragraph.}
-This is the long text of the second paragraph.
-This is the long text of the second paragraph.
-This is the long text of the second paragraph.
-This is the long text of the second paragraph.
-
-\paragraph{This is the third paragraph.}
-This is the long text of the third paragraph.
-This is the long text of the third paragraph.
-This is the long text of the third paragraph.
-This is the long text of the third paragraph.
-This is the long text of the third paragraph.
-This is the long text of the third paragraph.
-
-Finally, \cref{t:example-table} provides an example of table.
-You can add as many columns and rows as you wish.
-Please refer to \url{https://www.ctan.org/pkg/tabulary} for the documentation of the package.
-In particular, see how to change the size and the alignment of the columns, if you need it.
-
-\begin{table}
-\centering
-\begin{tabulary}{\textwidth}{lL}
-\toprule
-{} & \emph{Column} \\
-\emph{Column 1} & 2 \\
-\midrule
-text 1 & Some long text in the table. Some long text in the table. Some long text in the table. Some long text in the table. Some long text in the table.Some long text in the table. \\
-text 2 & some other text. some other text. some other text. some other text. some other text. some other text. \\
-\bottomrule
-\end{tabulary}
-\caption[This is the title of the table that goes in the list of tables]{This is the caption of the table.\label{t:example-table}}
-\end{table}
-
-%-------------------------------------------------------------------
-\section{General recommendations}
-\label{s:example_section}
-%-------------------------------------------------------------------
-
-An example of line breaking follows\footnote{And this is another example of footnote; don't forget the full stop at the end of the footnote.}.
-Do you see it? This is a new line in the \texttt{.tex} file but it is the same paragraph in the \texttt{pdf}.
-
-\begin{figure}
-\centering
-\includegraphics[width=0.5\textwidth]{figs/logo-unipv-bw}
-\caption[This is the text that goes in the list of figures]{Example of figure; this is the caption that goes below the figure.\label{f:logo}}
-\end{figure}
-
-\Cref{f:logo} reports an example of template to include a figure.
-Just copy this template around and set the filename (without extension!), the size, and write the caption.
-
-Use something like
-
-\begin{verbatim}
-width=0.5\textwidth
-\end{verbatim}
-
-to set the size of the figure as a percentage of the text width (in this case it is 50\%).
-You can also specify an absolute width with \texttt{width=4cm}, but usually a relative size is fine.
-Sometimes (very rarely, in my experience) you may want to set the size on the basis of the height of the figure, i.e., \texttt{height=4cm}.
-
-The label \textbf{must go inside the caption}, otherwise sometimes \LaTeX\ does not handle the references correctly.
-
-Every figure, table, listing or equation must be referenced and properly described in the text.
-\textbf{Never use statements such as \enquote{previous chapter}, \enquote{next section} or \enquote{figure below}}: these elements may be moved during the editing of the text, thus if you use these statements then you may have to update the sentences every time you move something around.
-This document uses the package \texttt{cleveref}, so use the command \texttt{\textbackslash cref} (e.g., this is a reference to \cref{s:example_section}) for a smart referencing (use \texttt{\textbackslash Cref} for uppercase).
-It takes care of putting the right label and spacing before the number, and it will reference the item independently from its position in the text.
-
-To use equations and to refer to them, use the \texttt{equation} environment like in this way:
-
-\begin{equation}
-\label{eq:example}
-A = \pi r^2
-\end{equation}
-%
-And proper reference to \cref{eq:example}.
-
-If you don't need to refer to an equation, you can skipt the numbering:
-
-\[
-2 + 2 = 4
-\]
-%
-In case of inline math, this is how it is done: $P = 2 \cdot \pi \cdot R$.
-
-\Cref{lst:example-listing} provides an example of listing for source code.
-
-\begin{lstlisting}[language=Python,
-caption={Example of listing.},
-label={lst:example-listing},
-float=tp]
-def filter_difference(lines):
-    filter_header_lines = filter(lambda line: not line.startswith(
-        '---') and not line.startswith('+++'), lines)
-    filter_difference = filter(lambda line: line.startswith(
-        '-') or line.startswith('+'), filter_header_lines)
-    return filter_difference
-\end{lstlisting}
-
-
-%----------------------------------------------------------
-\subsection{Formatting text}
-%----------------------------------------------------------
-
-Beside equations and math text, there are some other formattings that are worth mentioning:
-
-\begin{itemize}
-\item for everything related to software, such as file names, functions, variables, etc., use \texttt{texttt}, e.g., \texttt{hello.txt} or \texttt{var\_name}.
-\item to put some text within quotes, use \texttt{enquote}, e.g., \enquote{like this}; \texttt{enquote} is better than other solutions because it is more robust and handles internationalization correctly.
-\end{itemize}
-
-%----------------------------------------------------------
-\subsection{Citations}
-%----------------------------------------------------------
-
-For citations from the bibliography use \texttt{\textbackslash cite}.
-Here an example: \cite{example-citation}.
-
-Citations go \textbf{inside} the corresponding sentence.
-Note the position of the citation w.r.t. the full stop:
-
-\begin{itemize}
-\item \enquote{The algorithm has poor efficiency. \cite{example-citation}} \textbf{WRONG}
-\item \enquote{The algorithm has poor efficiency \cite{example-citation}.} \textbf{CORRECT}
-\end{itemize}
-
-You have to populate the bibliography file \texttt{biblio.bib}.
-You can put as many items as you want in the file.
-Only the items that are cited in the thesis with \texttt{\textbackslash cite} will be included in the bibliography, as in the example above.
-
-The items to populate the \texttt{.bib} file are in BibTeX format.
-This is a popular format.
-If you look for some paper or book, it is likely that somewhere the bib format already exists.
-Try to search on the Internet for the title of the paper plus \textit{bibliography} or \textit{bib}.
-
-%----------------------------------------------------------
-\subsection{Use of acronyms}
-%----------------------------------------------------------
-
-Acronyms are very popular in scientific and technical documents.
-We use the \texttt{acronym} package.
-
-All the acronyms are defined in \texttt{cap\_acronyms.inc.tex}.
-
-Use the acronyms with \enquote{\ac{UNIPV}}, \enquote{\ac{Robolab}}, \enquote{\ac{LED}}.
-The package is smart enough to write the long version the first time, and then to use the short version, like so: \enquote{\ac{UNIPV}} and \enquote{\ac{Robolab}}.
-
-Sometimes you need to use the full version again, do it with \acf{UNIPV}.
-If you need the long version only, use \acl{UNIPV}.
-
-Plurals can be handled with \acp{LED}.
-
-%----------------------------------------------------------
-\section{Objectives of the thesis}
-%----------------------------------------------------------
-
-%
-% toOl: to be completed
-%
-Put here the objectives of the thesis.
-
-%----------------------------------------------------------
 \section{Organization of the document}
-%----------------------------------------------------------
+\label{sec:intro:organization}
+%-------------------------------------------------------------------
 
-The thesis is organized as follows:
-
-%
-% toOl: complete this summary once the actual structure of the thesis is finalized.
-%
-\begin{itemize}
-\item \cref{c:sota} explains this $\ldots$
-\item \cref{c:tools} explains that $\ldots$
-\item \cref{c:implementation} presents this $\ldots$
-\item \cref{c:results} presents that $\ldots$
-\item finally the conclusions in \cref{c:conc}.
-\end{itemize}
-
-%----------------------------------------------------------
-\section{Partnership}
-%----------------------------------------------------------
-
-Any possible additional information regarding the thesis.
+\Cref{c:sota} reviews the state of the art on cellular automata, neural cellular automata, and mixture-based extensions.
+\Cref{c:tools} describes the software stack and the organization of the codebase used for the experiments.
+\Cref{c:implementation} details the implementation of the experiments: the synthetic biological simulator, the training and evaluation pipeline, and the design of the neighborhood-size sweep.
+\Cref{c:results} summarizes the main findings and their implications.
+\Cref{c:conc} draws conclusions and outlines possible directions for future work.

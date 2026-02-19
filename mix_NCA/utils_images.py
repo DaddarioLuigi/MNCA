@@ -32,7 +32,8 @@ def normalize_grads(model):  # makes training more stable, especially early on
 
 def train_nca(model, data, device = "cuda", num_steps = (10,20), learning_rate=1e-3, decay=0, milestones=[], gamma=0.1, batch_size = 64,
                state_dim = 16, seed_loc = (10,10), pool_size = 1024, total_steps = 10000, print_every = 100, 
-               return_history=False,temperature=None, min_temperature=0.1, anneal_rate=0.002, straight_through=True, init_black=False):
+               return_history=False,temperature=None, min_temperature=0.1, anneal_rate=0.002, straight_through=True, init_black=False,
+               progress_callback=None):
   
   model = model.to(device)  # put the model on GPU
   optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate, weight_decay=decay)
@@ -87,6 +88,8 @@ def train_nca(model, data, device = "cuda", num_steps = (10,20), learning_rate=1
 
     # bookkeeping and logging
     results['loss'].append(loss.item())
+    if progress_callback is not None:
+        progress_callback(step, total_steps, loss.item())
 
     if temperature is not None:
         temperature = max(min_temperature, temperature - anneal_rate * total_steps)

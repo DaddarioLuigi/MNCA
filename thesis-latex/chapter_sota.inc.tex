@@ -1,20 +1,215 @@
 %-------------------------------------------------------------------
-\chapter{State of the art}
+\chapter{State of the Art}
 \label{c:sota}
 %-------------------------------------------------------------------
 
 \epigraph{\enquote{The wireless telegraph is not difficult to understand. The ordinary telegraph is like a very long cat. You pull the tail in New York, and it meows in Los Angeles. The wireless is the same, only without the cat.}}{\emph{Albert Einstein}}
 
-This chapter provides an overview of the state of the art.
+%-------------------------------------------------------------------
+\section{Context, data, and the case for structured spatial models}
+\label{sec:sota:context}
+%-------------------------------------------------------------------
 
-% -------------------------------------------------------------------
-% Citations only (as requested). No explanatory text here.
-% -------------------------------------------------------------------
-\par\noindent
-\cite{ca_vonneumann1966}
-\cite{ca_wolfram2002}
-\cite{nca_mordvintsev2020}
-\cite{gca_placeholder}
-\cite{mnca_milite2025}
-\cite{hierarchical_nca_placeholder}
-\cite{topological_nca_placeholder}
+The modelling of spatially organised biological systems has a long tradition in mathematical and computational biology. It is well established that the spatial arrangement of cells and the local signals they exchange are critical determinants of form and function: morphogen gradients govern cell fate specification during development; stem-cell identity and niche behaviour depend on spatial context; and both cancer invasion and tissue regeneration are driven by local cell--cell and cell--environment interactions. Consequently, any computational model that aims to capture these phenomena must represent space explicitly and respect the constraint that no single agent has access to global state---each cell may depend only on information available in its immediate neighbourhood. Classical modelling approaches fall into two broad categories: continuum models based on partial differential equations (reaction--diffusion, mechanochemical formulations), and discrete agent-based models in which each cell obeys rules that depend on local context. The former offer analytical tractability in simple geometries but scale poorly to highly heterogeneous, discrete cell populations; the latter are flexible and widely used in tissue and cancer modelling, but the rules are typically hand-tuned or fitted via simulation-based inference (e.g.\ approximate Bayesian computation), and learning them directly from high-dimensional observational data remains challenging. A central question in the recent literature is therefore how to combine the structural assumptions of spatial, local interaction with the capacity to \emph{learn} dynamics from data using gradient-based optimisation \cite{mnca_milite2025}.
+
+The data on which such models are trained or validated are diverse. In developmental biology and morphogenesis, target data may consist of static patterns (e.g.\ a desired shape or cell-type map) or temporal sequences of spatial configurations obtained from time-lapse imaging or lineage tracing. In tissue and cancer modelling, high-throughput microscopy, spatial transcriptomics, and synthetic data from stochastic simulators (e.g.\ stem-cell-driven growth and differentiation on a grid) are commonly used. In all cases, observations are high-dimensional (many cells, time points, or channels), and the underlying transition rules are unknown or only partially specified. The objective is not merely to fit the data in a discriminative sense but to obtain a \emph{mechanistic}, generative representation that can be rolled out from new initial conditions, interrogated (e.g.\ which local rule applies where), and potentially steered by perturbing rules or initial state. This requirement pushes the modelling goal beyond pure prediction toward interpretable, generative spatial dynamics \cite{mnca_milite2025,nca_mordvintsev2020}.
+
+An alternative strategy is to treat the problem with generic deep learning: for instance, convolutional or recurrent networks that map the current grid state (or a sequence of states) to the next state or to a target output. Such architectures have been successfully applied to image-to-image prediction and video forecasting. However, they do not enforce locality by construction. The effective receptive field of a deep convolutional network can span the entire grid, and the manner in which information propagates across space and time is encoded implicitly in the weights, with no direct correspondence to the biological assumption that cells communicate only with neighbours. Empirically, long-horizon autoregressive rollouts from these models are often reported to drift, diverge, or become unstable, particularly when training data are limited or when the task demands extrapolation beyond the training distribution. Furthermore, the learned dynamics are difficult to interpret: one cannot readily extract a local rule or identify which cells influence which. By contrast, cellular automata and their neural extensions impose the prior that the next state of a cell depends only on a bounded neighbourhood. This structural bias restricts the hypothesis space, can improve sample efficiency in data-scarce regimes, and yields models that are aligned with the mechanistic, agent-based view of biology adopted in much of the spatial modelling literature. The trade-off is a reduction in expressive power in exchange for interpretability, stability under rollout, and a parameterisation that matches the domain. The remainder of this chapter surveys the relevant literature along this thread, from classical CA to neural and mixture-based CA, so as to position the model used in this thesis within a well-defined methodological and applied context.
+
+%-------------------------------------------------------------------
+\section{Cellular Automata}
+\label{sec:sota:ca}
+%-------------------------------------------------------------------
+
+Cellular automata (CA) have been studied since the pioneering work of von Neumann on self-reproducing automata and have since become a canonical framework for studying emergence from local rules \cite{ca_vonneumann1966,ca_wolfram2002}. A CA consists of a discrete grid of cells, each endowed with a state drawn from a finite (or, in continuous variants, real-valued) set. Time advances in discrete steps; at each step, every cell is updated according to a fixed rule that depends only on its own state and the states of the cells in a small neighbourhood. There is no central controller: the next configuration is determined solely by applying the same local rule everywhere in parallel. This formulation captures the essence of decentralised, spatially local computation and has been applied across physics, ecology, and biology \cite{ca_wolfram2002}.
+
+Formally, let \(\mathcal{L}\) denote the set of cell positions (e.g.\ a finite or infinite subset of \(\mathbb{Z}^2\)), and \(\mathcal{S}\) the set of possible cell states. The neighbourhood of a cell at \((i,j)\) is a set \(\mathcal{N}(i,j) \subseteq \mathcal{L}\) of nearby positions (e.g.\ those within Chebyshev distance \(r\) for some radius \(r\)). The global state at time \(t\) is a function \(x_t : \mathcal{L} \to \mathcal{S}\). The update rule is a function \(\phi\) that maps the state of a cell and its neighbourhood to a new state:
+\begin{equation}
+x_{t+1}(i,j) = \phi\bigl( x_t(i,j), \, \{ x_t(i',j') : (i',j') \in \mathcal{N}(i,j) \} \bigr).
+\end{equation}
+The dynamics are fully specified by \(\phi\) and the initial condition \(x_0\). Despite this simplicity, CAs are known to exhibit a wide range of behaviours---from static or periodic patterns to chaos, self-replication, and universal computation---and have been the subject of extensive theoretical and applied work \cite{ca_wolfram2002}. In the biological context, the emphasis on locality and discreteness aligns with the view that cells interact primarily with nearby cells and that developmental and tissue-level dynamics can be approximated by discrete-time updates. CAs have accordingly been used as tools for simulating growth, pattern formation, and morphogenesis in the literature \cite{ca_vonneumann1966}. See \cref{fig:sota:ca_example} for an illustration.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.62\textwidth]{figs/sota_ca_example}
+  \caption{Example of a cellular automaton: a discrete grid updated by a local rule (after \cite{ca_wolfram2002}).}
+  \label{fig:sota:ca_example}
+\end{figure}
+
+The main limitation in the present context is that the rule \(\phi\) is fixed and hand-crafted. Inverse design---finding a \(\phi\) that produces a desired global behaviour (e.g.\ a specific shape or regenerative response) from a simple seed---is known to be difficult; reverse-engineering such rules for biologically plausible outcomes remains an open problem. This limitation has motivated a line of work in which the update rule is \emph{learned} from data rather than specified a priori, leading to the neural cellular automata discussed in the next section.
+
+%-------------------------------------------------------------------
+\section{Neural Cellular Automata}
+\label{sec:sota:nca}
+%-------------------------------------------------------------------
+
+The parametrisation of CA update rules by neural networks was made explicit by Gilpin, who showed that certain CAs can be expressed as convolutional neural networks \cite{ca_gilpin2019}. Mordvintsev et al.\ then demonstrated that such rules can be \emph{learned} from data via gradient-based optimisation, giving rise to what is now commonly called Neural Cellular Automata (NCA) \cite{nca_mordvintsev2020}. NCAs retain the spatial structure and locality of classical CAs but replace the hand-crafted rule \(\phi\) with a parametrised function implemented by a small neural network. The same network is applied at every cell; only the local perception (and, in some extensions, a small amount of global conditioning) varies across the grid. Formally, NCAs substitute \(\phi\) in the classical CA update with a learned map \(f_\theta\) that takes a local view of the grid and outputs an update (typically an increment) to the cell state.
+
+A common formulation is
+\begin{equation}
+x_{t+1} = x_t + f_\theta\bigl( \mathcal{P}(x_t) \bigr),
+\end{equation}
+where \(\mathcal{P}(x_t)\) denotes a \emph{perception} step that, for each cell, aggregates information from a neighbourhood (e.g.\ the cell's own state plus gradient-like features in the horizontal and vertical directions, as in the Growing NCA model below). The network \(f_\theta\) is typically a shallow stack of \(1\times 1\) convolutions and nonlinearities, so that it operates in a local fashion and can be applied in one pass over the grid. Training is usually performed by minimising a loss between the state produced after a number of steps and a target (e.g.\ an image or a temporal trajectory), using backpropagation through time (BPTT). Subsequent work has extended NCAs to texture synthesis, 3D morphogenesis, and classification tasks, and has explored variants with attention mechanisms or graph-based neighbourhoods; the core idea of a single, learned local rule applied everywhere remains central \cite{nca_mordvintsev2020}.
+
+This shift from fixed to learned rules has several consequences that are relevant to the present thesis. First, NCAs can be trained to reproduce complex target dynamics (morphogenesis, texture synthesis, regeneration) without explicitly programming the transition rule. Second, the model remains interpretable in the sense that behaviour is driven exclusively by local updates. Third, the framework is differentiable end-to-end, so objectives can be defined at the level of global outcomes (e.g.\ match a target pattern) and the local rule can be optimised accordingly. For these reasons, NCAs have been adopted as a natural tool for modelling biological and self-organising systems where the goal is to learn growth and patterning from data rather than to postulate a specific \(\phi\) \cite{nca_mordvintsev2020}. \Cref{fig:sota:nca_schema} illustrates the generic NCA step.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.72\textwidth]{figs/sota_nca_schema}
+  \caption{Single NCA update step: perception (state + gradients) is fed to a neural network that outputs a state increment, applied residually (after Mordvintsev et al., 2020, \protect\url{https://distill.pub/2020/growing-ca/}).}
+  \label{fig:sota:nca_schema}
+\end{figure}
+
+%-------------------------------------------------------------------
+\section{Growing Neural Cellular Automata}
+\label{sec:sota:growing}
+%-------------------------------------------------------------------
+
+Mordvintsev et al.\ introduced \emph{Growing Neural Cellular Automata} in a setting that focuses explicitly on morphogenesis: the NCA is trained to grow a predefined multicellular pattern on a 2D grid from a single seed cell \cite{nca_mordvintsev2020}. This setting has since served as a reference benchmark and as a bridge between abstract NCA and biologically inspired notions of growth, stability, and regeneration.
+
+\subsection{Cell state and perception}
+
+Each cell is represented by a vector of 16 real values. The first three channels are RGB (the visible phenotype); the fourth is an alpha channel used to distinguish ``living'' cells (alpha \(> 0.1\)) from empty ones. The remaining channels are latent and used by the rule for internal signalling. Cells with no living neighbour in their \(3\times 3\) neighbourhood have their state set to zero at each step, so that only the pattern and its immediate frontier participate in the dynamics.
+
+Perception is implemented by augmenting the cell state with local gradient information. Convolving the grid with Sobel filters in the \(x\) and \(y\) directions yields, for each channel, estimates of \(\partial/\partial x\) and \(\partial/\partial y\). The perception vector for a cell is the concatenation of its state, the gradients in \(x\), and the gradients in \(y\), giving a \(16 \times 3 = 48\)-dimensional input per cell. This design reflects the idea that cells in real morphogenesis often rely on chemical or electrical gradients to coordinate; the Sobel filters provide a fixed, differentiable way to sense direction and rate of change.
+
+\subsection{Update rule and stochasticity}
+
+The update rule is a small fully connected (or equivalently \(1\times 1\) convolutional) network that maps the 48-dimensional perception to a 16-dimensional state increment. The final layer is initialised to zero so that the initial behaviour is close to ``do nothing'', and no ReLU is applied to the output so that updates can be positive or negative. The state is updated in a residual fashion: \(x_{t+1} = x_t + \Delta x_t\). \Cref{fig:sota:growing_update} summarises one full update step (perception, update, stochastic mask, alive masking).
+
+To relax the assumption of a global synchronous clock, the model applies a random per-cell mask to the update: with probability 0.5 (during training), the update at a cell is zeroed. Thus cells effectively update at random times, which can improve robustness and is closer to asynchronous biological update.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.76\textwidth]{figs/sota_growing_update}
+  \caption{One update step of the Growing NCA: perception (state and gradient channels), update network, stochastic cell update, and living-cell masking (from Mordvintsev et al., 2020, \protect\url{https://distill.pub/2020/growing-ca/}, section ``Model'').}
+  \label{fig:sota:growing_update}
+\end{figure}
+
+\subsection{Training for growth, persistence, and regeneration}
+
+Training proceeds in three phases \cite{nca_mordvintsev2020}. In the first, the CA is trained to reach a target pattern from a single seed after a random number of steps in a fixed range; the loss is pixel-wise L2 between the final state and the target. This yields growth but often unstable long-term behaviour (patterns may explode or decay). In the second phase, a \emph{sample pool} of states is maintained: at each training step, a batch is sampled from the pool, the highest-loss sample is replaced by the seed, and the model is run on the batch; the resulting states are written back into the pool. The dynamics are thus trained not only to grow from the seed but also to persist and to correct from states that are already close to or far from the target, encouraging the target to become an attractor. In the third phase, a subset of the pool samples is \emph{damaged} (e.g.\ by zeroing a random circular region) before iteration, so that the model must learn to regenerate. Models trained with this damage regime exhibit substantially stronger regenerative behaviour than those trained only for growth or persistence \cite{nca_mordvintsev2020}. \Cref{fig:sota:growing_training_steps} shows the evolution of a pattern during training; \cref{fig:sota:growing_pool} and \cref{fig:sota:growing_regeneration} illustrate pool-based training and regeneration.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.72\textwidth]{figs/sota_growing_training_steps}
+  \caption{CA behaviour at training steps 100, 500, 1000, 4000: the pattern evolves from an initial seed toward the target (from Mordvintsev et al., 2020).}
+  \label{fig:sota:growing_training_steps}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.72\textwidth]{figs/sota_growing_pool}
+  \caption{Sample-pool training: a random sample of the patterns in the pool during training (from Mordvintsev et al., 2020, \protect\url{https://distill.pub/2020/growing-ca/}, Experiment 2).}
+  \label{fig:sota:growing_pool}
+\end{figure}
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.72\textwidth]{figs/sota_growing_regeneration}
+  \caption{Regeneration: patterns exhibit regenerative properties upon being damaged, but not full re-growth (from Mordvintsev et al., 2020, \protect\url{https://distill.pub/2020/growing-ca/}, Experiment 3).}
+  \label{fig:sota:growing_regeneration}
+\end{figure}
+
+This progression---growth, persistence, regeneration---demonstrates that a single local rule, learned with appropriate objectives and data diversity, can capture morphogenetic and homeostatic behaviour. It also motivates the next step in the literature: the introduction of multiple rules and explicit stochasticity to better match the variability and heterogeneity of real biological systems.
+
+%-------------------------------------------------------------------
+\section{Limits of Standard NCA and the Role of Stochasticity}
+\label{sec:sota:limits}
+%-------------------------------------------------------------------
+
+Standard NCA models, including the Growing NCA described above, are deterministic: given the same initial state and the same (possibly stochastic) update mask, the trajectory is uniquely determined. It is well established in the biological literature that real systems are inherently stochastic: gene expression, cell division, and differentiation are subject to molecular noise; genetically identical cells can follow different fates; and tissue-level outcomes emerge from the statistics of many such noisy, local events. Deterministic NCAs can at best produce a single ``average'' trajectory and do not naturally represent variability across runs or the possibility that different cells might follow different behavioural programmes.
+
+Furthermore, in real morphogenesis and tissue maintenance, cells are not all executing the same programme: they differentiate into distinct types and adopt different roles. A single global update rule can encode complex behaviour through the hidden state, but it does not explicitly represent a \emph{mixture} of distinct local behaviours (e.g.\ one rule favouring proliferation at the border, another maintaining quiescence in the interior). These observations have motivated a line of work that extends the NCA framework to support multiple update rules and stochastic selection among them, so that both spatial heterogeneity (different rules in different regions) and variability across realisations can be captured. The Mixture of Neural Cellular Automata (MNCA) framework, reviewed in the next section, implements this extension \cite{mnca_milite2025}.
+
+%-------------------------------------------------------------------
+\section{Mixture of Neural Cellular Automata}
+\label{sec:sota:mnca}
+%-------------------------------------------------------------------
+
+Milite et al.\ \cite{mnca_milite2025} introduced the Mixture of Neural Cellular Automata (MNCA), a framework that addresses two limitations of standard NCAs: their deterministic nature, which poorly matches the stochasticity of real biological systems (e.g.\ gene expression, cell differentiation, carcinogenesis), and the lack of an explicit representation of heterogeneous local behaviours. By combining mixture models with the NCA paradigm, MNCA allows each cell to be governed by one of \(K\) distinct neural update rules, with the choice made probabilistically from the current state. The authors further propose an extension with \emph{intrinsic noise}: a Gaussian latent vector fed into each rule so that even the same rule can produce stochastic updates, thereby capturing intra-cluster variability. The result is a stochastic, spatially heterogeneous dynamics that can be trained end-to-end and that offers interpretable rule assignments for post-hoc analysis \cite{mnca_milite2025}. MNCA constitutes the central model used in this thesis; all experiments reported in \cref{c:implementation} and \cref{c:results} are based on it.
+
+\subsection{Formal definition and two variants}
+
+Consider a grid of cells; let \(s^t_i \in \mathcal{S}\) denote the state of cell \(i\) at time \(t\) and \(\mathcal{N}(i)\) its neighbourhood. The authors define \(K\) neural transition functions \(\phi_k(\cdot; \theta_k)\), each mapping the local configuration (cell state and neighbours) to a state increment. A \emph{rule selector} is a neural network \(\pi(\cdot; \eta)\) that, given the current cell state (and optionally noise), outputs a \(K\)-dimensional probability vector over rules.
+
+\paragraph{Mixture NCA (no intrinsic noise).} The rule index for cell \(i\) at time \(t\) is drawn from a Categorical distribution parametrised by \(\pi(s^t_i; \eta)\). Denoting by \(z \in \{1,\ldots,K\}\) the selected rule (one-hot encoded as \(z_k\)), the update is
+\begin{equation}
+z \sim \mathrm{Cat}\bigl(\pi(s^t_i; \eta)\bigr), \qquad
+s^{t+1}_i = s^t_i + \sum_{k=1}^{K} z_k \, \phi_k\bigl(s^t_i, \{s^t_j : j \in \mathcal{N}(i)\}; \theta_k\bigr).
+\end{equation}
+Thus exactly one rule applies per cell per step; the Categorical is sampled so that the process is stochastic. To backpropagate through the discrete choice, the authors use the Gumbel-Softmax trick \cite{mnca_milite2025}.
+
+\paragraph{MNCA with intrinsic noise.} Biological systems often exhibit variability even among cells that share the same ``type'' or context. To allow for intra-rule stochasticity, the update functions are given an extra input \(x_k \sim \mathcal{N}(0, I)\) sampled once per rule (or per cell and rule) and concatenated to the perception. The update becomes
+\begin{equation}
+z \sim \mathrm{Cat}\bigl(\pi(s^t_i; \eta)\bigr), \quad
+x_k \sim \mathcal{N}(0, 1), \qquad
+s^{t+1}_i = s^t_i + \sum_{k=1}^{K} z_k \, \phi_k\bigl(s^t_i, \{s^t_j : j \in \mathcal{N}(i)\}, x_k; \theta_k\bigr).
+\end{equation}
+The noise \(x_k\) is an internal source of randomness that the network can use to implement stochastic behaviour within each rule (e.g.\ random timing of division or differentiation). In the paper's experiments, both variants are evaluated; the one with intrinsic noise often yields better robustness and more realistic tissue statistics \cite{mnca_milite2025}.
+
+\subsection{Architecture and implementation}
+
+The paper keeps a simple, consistent architecture across tasks. Perception is the same as in many NCAs: the state is concatenated with its spatial gradients in \(x\) and \(y\) obtained via Sobel filters, i.e.\ \(\mathcal{P}(s) = \mathrm{cat}(s, \nabla_x s, \nabla_y s)\). Each rule \(\phi_k\) is implemented as two \(1\times 1\) convolutional layers: a hidden layer with ReLU on the perceived input (and, in the noisy variant, concatenated with \(x_k\)), then a linear layer that outputs the state increment. The rule selector \(\pi\) is a network of the same type but takes only the \emph{current cell state} \(s^t_i\) as input (not the full perception), so that the assignment depends on the cell's own state rather than on neighbour states. Training uses the mean squared error between the predicted and target state; optimisation is performed with Adam and a multi-step learning-rate schedule. Depending on the task, the update is applied as a residual (\(s^{t+1}_i = s^t_i + \Delta s\)) or the state is replaced entirely. Key hyperparameters (number of channels, number of rules \(K\), hidden dimension, residual or not) are reported per experiment: for example, the tissue-growth setup uses 6 channels, 5 rules, hidden dimension 128, and no residual update \cite{mnca_milite2025}. \Cref{fig:sota:mnca_schema} corresponds to Figure~1 in the paper, which summarises the full pipeline: spatial filters, central cell and neighbours, rule selector (MLP) yielding rule probabilities, and the selected NCA with optional noise injection.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.76\textwidth]{figs/sota_mnca_schema}
+  \caption{MNCA architecture (after Milite et al., 2025, Figure~1): perception via spatial filters (central cell and neighbours); rule selector (MLP on central cell state) outputs rule probabilities; the selected rule is applied to the perceived state, with optional Gaussian noise \(x_k\) for the intrinsic-noise variant (\protect\url{https://arxiv.org/abs/2506.20486}).}
+  \label{fig:sota:mnca_schema}
+\end{figure}
+
+\subsection{Experimental evidence and interpretability}
+
+The paper evaluates MNCA in three domains. (1)~\textbf{Synthetic tissue growth and differentiation:} a stochastic simulator generates epithelial-like tissues with five cell types (stem, two intermediate, two differentiated) on a \(35\times 35\) grid from an initial cluster of stem cells. MNCA and MNCA with intrinsic noise are trained to reconstruct the state at each time step. They substantially outperform a deterministic NCA and a Gaussian NCA (GCA) in terms of KL divergence of the cell-type distribution, Wasserstein distance on tissue size, and Wasserstein distance on border complexity. For example, the deterministic NCA reaches a KL divergence of about 2.06 while MNCA reaches about 0.02; the model with intrinsic noise further improves border fidelity \cite{mnca_milite2025}. Moreover, the learned rule assignments align with cell types: plotting the probability of each rule across the grid shows that roughly one rule is associated with each cell type (and one with empty space), with some rules shared (e.g.\ stem and one differentiated type), indicating that the model has discovered an interpretable partition of the state space. (2)~\textbf{Image morphogenesis:} the model is trained on emoji-like target images (as in Mordvintsev et al.) and then tested \emph{without} having seen perturbations during training. Under chunk removal, Gaussian noise addition, and sparse pixel removal, mixture-based NCAs recover the target image more reliably than the deterministic NCA; the error over recovery steps often peaks then decreases, suggesting that the target acts as an attractor. The GCA baseline does not show a clear advantage over the deterministic NCA in these experiments. (3)~\textbf{Unsupervised segmentation of microscopy images:} using high-content screening data (BBBC031v1), the authors initialise one seed per cell centroid and run the MNCA. The inferred rule assignments segment the tissue into regions that correlate with morphological and proteomic features (e.g.\ a provided ``cell shape parameter''), and constraining which rules are active at inference time can steer the population toward different phenotypes. Together, these results support the claim that MNCA captures diverse local behaviours, improves robustness, and provides interpretable rule-based segmentation \cite{mnca_milite2025}.
+
+\subsection{Motivations and advantages}
+
+MNCA provides \emph{spatial heterogeneity}: different regions of the grid can specialise to different rules (e.g.\ by cell type or by position). It also provides \emph{temporal stochasticity} through both the random choice of rule and, in the noisy variant, the internal noise \(x_k\). This aligns with the view that biological cells exhibit context-dependent and inherently noisy behaviour. From a modelling perspective, the mixture can represent distinct behavioural programmes (proliferation, quiescence, differentiation) that are selected or mixed according to local state. From an interpretability perspective, the rule-assignment maps allow one to see how the model partitions the grid into functional regions and to relate those partitions to known biological or morphological structure. Finally, the explicit stochasticity and multiplicity of rules make MNCA a better fit for biological growth and self-organisation than a single deterministic NCA \cite{mnca_milite2025}.
+
+\subsection{Position in this thesis}
+
+All experiments in this thesis use MNCA as the base model (with the option of intrinsic noise). We train mixture NCAs on synthetic tissue-like trajectories and evaluate whether extending the spatial neighbourhood (the size of \(\mathcal{N}\) used in perception) improves learning and long-horizon stability. The comparison across neighbourhood sizes and the analysis of rule usage and specialisation are therefore directly about the MNCA architecture and its sensitivity to the choice of locality, as introduced in \cite{mnca_milite2025}.
+
+%-------------------------------------------------------------------
+\section{Hierarchy in Self-Organising Systems and in NCA}
+\label{sec:sota:hierarchy}
+%-------------------------------------------------------------------
+
+Biological systems are organised at multiple scales: cells form tissues, tissues form organs, and organs form organisms. Communication and control occur both within and across these scales. A single-scale NCA models dynamics at one level (e.g.\ cells on a grid) and does not explicitly represent higher-level structure (tissues, organs) or feedback from larger scales to smaller ones.
+
+Hierarchical NCA (H-NCA) \cite{hnca_pande2023} addresses this by arranging several NCA modules in a hierarchy. Each cell of an NCA at a higher level is associated with a \emph{cluster} of cells of the NCA at the level below. The higher-level cell receives a summary of the state of its cluster (via a sensor) and can influence the lower-level NCA through signal channels (via an actuator). Training is phased: the lower-level NCA is trained toward its own goal; once it reaches a stable state, feedback is sent to the level above, which then modulates the lower level. This allows the system to exhibit multi-phase behaviour (e.g.\ growth then differentiation) and to model phenomena such as cell differentiation and metamorphosis, where the trigger for a new phase comes from within the system rather than from an external controller. The authors show that such hierarchical organisation can improve the capacity to evolve and maintain complex patterns and to coordinate behaviour across scales \cite{hnca_pande2023}. \Cref{fig:sota:hnca_arch} illustrates the H-NCA layout.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.72\textwidth]{figs/sota_hnca_architecture}
+  \caption{H-NCA: each cell of the parent NCA controls a cluster of child NCA cells; sensor and actuator mediate feedback between levels (after Pande \& Grattarola, 2023, \protect\url{https://doi.org/10.1162/isal_a_00601}).}
+  \label{fig:sota:hnca_arch}
+\end{figure}
+
+Although hierarchical NCA is not directly used in the experiments of this thesis, it provides a broader perspective on the literature: the MNCA model adopted here operates at a single scale with multiple rules; future work could combine mixture-style stochasticity with hierarchical structure to capture both heterogeneity at one scale and coordination across scales.
+
+%-------------------------------------------------------------------
+\section{Connections to Topological Deep Learning}
+\label{sec:sota:topological}
+%-------------------------------------------------------------------
+
+Topological deep learning (TDL) develops models for data defined on topological spaces and for relations that go beyond pairwise (graph) structure \cite{tdl_hajij2023}. Graphs encode dyadic relations; many phenomena involve higher-order relations (e.g.\ cells in a tissue, vertices of a simplex, or nodes in a hyperedge). TDL generalises graph neural networks to simplicial complexes, cell complexes, hypergraphs, and combinatorial complexes, so that message passing and representation learning can operate on higher-dimensional cells and their incidence structure. The resulting models can capture multi-scale and hierarchical structure and can be more expressive than standard GNNs when the data have rich topological structure \cite{tdl_hajij2023}. \Cref{fig:sota:tdl_schema} gives a visual hint of the shift from graphs to higher-order structures.
+
+\begin{figure}[t]
+  \centering
+  \includegraphics[width=0.62\textwidth]{figs/sota_tdl_schema}
+  \caption{From graphs to higher-order structures: TDL extends message passing to simplicial/cell complexes and hypergraphs (after Hajij et al., 2023, \protect\url{https://arxiv.org/abs/2206.00606}).}
+  \label{fig:sota:tdl_schema}
+\end{figure}
+
+NCAs are not typically formulated in the language of TDL: they operate on a regular grid with a fixed neighbourhood, and the underlying topology is that of the grid graph. Nevertheless, a conceptual link exists. NCAs rely on \emph{local} interactions and on the propagation of information through the grid over time; the receptive field of a cell grows with the number of steps. TDL, in turn, emphasises \emph{structural} and \emph{relational} information---who interacts with whom, and at what order---rather than only metric locality. Thus NCA can be viewed as a special case of dynamics on a structured domain (the grid) with a fixed neighbourhood graph, and TDL as a framework that generalises the notion of neighbourhood and interaction to higher-order and possibly non-Euclidean domains \cite{tdl_hajij2023}. From that perspective, the choice of neighbourhood size in NCA is a choice about the local structure that each cell sees; TDL suggests that more general notions of structure (e.g.\ multi-scale or higher-order) could be incorporated in future NCA-style models for biological and self-organising systems. This thesis does not implement TDL methods; the connection is noted here to situate the present work within a broader trend toward structured, topology-aware models.
+
+%-------------------------------------------------------------------
+\section{Synthesis and Positioning of This Thesis}
+\label{sec:sota:synthesis}
+%-------------------------------------------------------------------
+
+The foregoing review has traced a coherent narrative through the literature. Classical cellular automata establish that local rules suffice for emergent global behaviour but leave the rule design to the modeller; inverse design remains difficult. Neural cellular automata address this by learning the rule from data while preserving locality and differentiability; the link between CA and convolutional networks was established by Gilpin \cite{ca_gilpin2019}, and learning from data for morphogenesis was demonstrated by Mordvintsev et al.\ \cite{nca_mordvintsev2020}. Growing NCA specialises the framework to growth from a seed and introduces training strategies (sample pool, damage) for persistence and regeneration. Standard NCA, however, remain deterministic and single-rule, which limits their ability to capture the variability and heterogeneity observed in real biological systems. Mixture NCA extend the framework by introducing multiple rules and stochastic selection, aligning the model with the stochastic, heterogeneous nature of real tissues; the work of Milite et al.\ provides a formalisation and empirical validation across tissue growth, image morphogenesis, and microscopy segmentation. Parallel developments include hierarchical NCA for multi-scale organisation and topological deep learning for data on non-Euclidean or higher-order structures. Taken together, this body of work motivates the use of MNCA as the base model for the present thesis.
+
+The contribution of this thesis sits squarely on the MNCA branch: the mixture formulation is taken as given, and the central question is whether enlarging the spatial neighbourhood improves performance in a tissue-growth setting. The hierarchy and the topological formulation of the domain are not modified; the focus is on the effect of the locality radius and on the interaction between neighbourhood size, curriculum design, and long-horizon stability. The following chapters describe the tools, the implementation, and the results of that investigation.

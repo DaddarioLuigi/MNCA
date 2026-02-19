@@ -154,6 +154,9 @@ class MixtureNCA(nn.Module):
         if temperature is None:
             temperature = self.temperature
 
+        # Clamp logits to avoid overflow in softmax / Gumbel (prevents NaN in phase 2+ curriculum)
+        logits = torch.clamp(logits, -50.0, 50.0)
+
         probs = F.softmax(logits / temperature, dim=1)
 
         if sample_non_differentiable:
@@ -168,7 +171,7 @@ class MixtureNCA(nn.Module):
             return hard_samples
         else:
             # Gumbel-Softmax (optionally with straight-through)
-            gumbel_noise = -torch.empty_like(logits).exponential_().log()
+            gumbel_noise = -torch.empty_like(logits).exponential_().clamp(min=1e-10).log()
             y = (logits + gumbel_noise) / temperature
             y_soft = F.softmax(y, dim=1)
 

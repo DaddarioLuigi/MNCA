@@ -121,12 +121,13 @@ def train_nca_dyn(model, target_states, n_cell_types=5, time_length=10, n_epochs
         end_idx = start_idx + time_length
         n_loss_terms = 0
         
-        # Track gradients for the sampled sequence
+        # Track gradients for the sampled sequence; use every intermediate step as target (not only every update_every)
         for step in range(start_idx, end_idx - update_every, update_every):
-            n_loss_terms += 1
             # Get current state from precomputed tensors
-            current_state = precomputed_states[step] 
-            # Forward pass
+            current_state = precomputed_states[step]
+            step_loss_sum = 0.0
+            step_loss_count = 0
+            # Forward pass: unroll update_every steps and add loss at each intermediate step
             for t in range(update_every):
                 if class_assignment is not None:
                     class_assignment = torch.argmax(current_state, dim=1)
@@ -141,32 +142,40 @@ def train_nca_dyn(model, target_states, n_cell_types=5, time_length=10, n_epochs
                         current_state = model(current_state, num_steps=1, return_history=False)
                     else:
                         current_state = model(current_state, num_steps=1, return_history=False, temperature = temperature, straight_through = straight_through)
-            
 
-            target_state = precomputed_states[step + update_every]
-            pred = current_state
-            target = target_state
-            
-            if loss_type == "cross_entropy":
-                target = torch.argmax(target, dim=1)
+                target_state = precomputed_states[step + t + 1]
+                pred = current_state
+                target = target_state
+                if loss_type == "cross_entropy":
+                    target = torch.argmax(target, dim=1)
+                single = criterion(pred, target)
+                if torch.isfinite(single).all():
+                    step_loss_sum = step_loss_sum + single
+                    step_loss_count += 1
 
-            # Compute loss
-            single_loss = criterion(pred, target)
-            
+            if step_loss_count == 0:
+                optimizer.zero_grad()
+                continue
+
+            single_loss = step_loss_sum / step_loss_count
+
+            n_loss_terms += 1
             # Backward pass
             single_loss.backward()
-            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=10.0)
+            torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=5.0)
             optimizer.step()
             optimizer.zero_grad()
 
             total_loss += single_loss.item()
 
-
             if temperature is not None and anneal_temperature and anneal_rate and anneal_rate > 0:
                 temperature = max(min_temperature, temperature - anneal_rate)
 
         scheduler.step()
-        epoch_loss = total_loss / max(1, n_loss_terms)
+        if n_loss_terms == 0:
+            epoch_loss = float('nan')
+        else:
+            epoch_loss = total_loss / n_loss_terms
         losses.append(epoch_loss)
         
         # Update progress bar description with current loss

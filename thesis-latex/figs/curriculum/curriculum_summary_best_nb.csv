@@ -1,0 +1,37 @@
+Model,Step Length,Metric,Best NB,Value
+Mixture NCA,25,KL Divergence,3,0.092
+Mixture NCA,25,Chi-Square,3,0.086
+Mixture NCA,25,Categorical MMD,3,0.107
+Mixture NCA,25,Tumor Size Diff,2,0.345
+Mixture NCA,25,Border Size Diff,3,0.138
+Mixture NCA,25,Spatial Variance Diff,3,0.244
+Mixture NCA,100,KL Divergence,5,0.234
+Mixture NCA,100,Chi-Square,3,0.21
+Mixture NCA,100,Categorical MMD,5,0.103
+Mixture NCA,100,Tumor Size Diff,5,0.111
+Mixture NCA,100,Border Size Diff,3,0.129
+Mixture NCA,100,Spatial Variance Diff,3,0.218
+Mixture NCA,500,KL Divergence,5,0.15
+Mixture NCA,500,Chi-Square,5,0.146
+Mixture NCA,500,Categorical MMD,3,0.138
+Mixture NCA,500,Tumor Size Diff,2,0.154
+Mixture NCA,500,Border Size Diff,3,0.133
+Mixture NCA,500,Spatial Variance Diff,3,0.226
+Stochastic Mixture NCA,25,KL Divergence,3,0.018
+Stochastic Mixture NCA,25,Chi-Square,3,0.018
+Stochastic Mixture NCA,25,Categorical MMD,3,0.081
+Stochastic Mixture NCA,25,Tumor Size Diff,2,0.365
+Stochastic Mixture NCA,25,Border Size Diff,2,0.169
+Stochastic Mixture NCA,25,Spatial Variance Diff,2,0.323
+Stochastic Mixture NCA,100,KL Divergence,5,0.056
+Stochastic Mixture NCA,100,Chi-Square,5,0.055
+Stochastic Mixture NCA,100,Categorical MMD,5,0.047
+Stochastic Mixture NCA,100,Tumor Size Diff,5,0.319
+Stochastic Mixture NCA,100,Border Size Diff,5,0.105
+Stochastic Mixture NCA,100,Spatial Variance Diff,5,0.194
+Stochastic Mixture NCA,500,KL Divergence,5,0.049
+Stochastic Mixture NCA,500,Chi-Square,5,0.048
+Stochastic Mixture NCA,500,Categorical MMD,5,0.039
+Stochastic Mixture NCA,500,Tumor Size Diff,5,0.24
+Stochastic Mixture NCA,500,Border Size Diff,5,0.063
+Stochastic Mixture NCA,500,Spatial Variance Diff,5,0.117

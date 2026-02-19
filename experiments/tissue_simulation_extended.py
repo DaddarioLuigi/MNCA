@@ -18,6 +18,78 @@ import matplotlib.animation as animation
 from pathlib import Path
 
 
+def train_nca_with_early_stopping(
+    *,
+    model,
+    histories,
+    n_cell_types,
+    max_epochs,
+    time_length,
+    update_every,
+    device,
+    lr,
+    loss_type="mse",
+    patience=20,
+    extra_train_kwargs=None,
+):
+    """
+    Train a model with early stopping based on training loss.
+
+    NOTE: This uses only training loss (no separate validation pass),
+    but stops when the loss plateaus for `patience` epochs.
+    """
+    extra_train_kwargs = extra_train_kwargs or {}
+
+    best_loss = float("inf")
+    best_state_dict = None
+    epochs_without_improvement = 0
+
+    all_train_losses = []
+
+    for epoch in range(1, max_epochs + 1):
+        epoch_losses = train_nca_dyn(
+            model=model,
+            target_states=histories,
+            n_cell_types=n_cell_types,
+            n_epochs=1,
+            time_length=time_length,
+            update_every=update_every,
+            device=device,
+            lr=lr,
+            return_losses=True,
+            loss_type=loss_type,
+            **extra_train_kwargs,
+        )
+        if epoch_losses is not None and len(epoch_losses) > 0:
+            last_loss = float(epoch_losses[-1])
+            all_train_losses.extend(list(epoch_losses))
+        else:
+            last_loss = float("inf")
+
+        # Early stopping check on training loss
+        if last_loss < best_loss - 1e-6:
+            best_loss = last_loss
+            best_state_dict = {k: v.cpu().clone() for k, v in model.state_dict().items()}
+            epochs_without_improvement = 0
+        else:
+            epochs_without_improvement += 1
+
+        print(
+            f"  [ES] epoch {epoch}/{max_epochs} "
+            f"- train_loss={last_loss:.6f} "
+            f"(best={best_loss:.6f}, no_improve={epochs_without_improvement}/{patience})"
+        )
+
+        if epochs_without_improvement >= patience:
+            print("  Early stopping triggered on training loss.")
+            break
+
+    if best_state_dict is not None:
+        model.load_state_dict(best_state_dict)
+
+    return all_train_losses
+
+
 def _parse_csv_ints(s: str):
     return [int(x.strip()) for x in s.split(",") if x.strip()]
 
@@ -314,10 +386,11 @@ def run_experiment(histories_path, output_dir, neighborhood_sizes,
                    n_epochs=800, time_length=500, update_every=1,
                    n_cell_types=6, device="auto", n_evaluations=10,
                    step_lengths=[25, 100, 500], generate_videos=False,
-                   curriculum=False, curriculum_schedule=None):
+                   curriculum=False, curriculum_schedule=None, resume_from_phase=1,
+                   eval_only=False, seed=None):
     """
     Train and evaluate NCA models with different neighborhood sizes on biological simulations
-    
+
     Args:
         histories_path: Path to histories.npy file
         output_dir: Directory to save results
@@ -328,7 +401,15 @@ def run_experiment(histories_path, output_dir, neighborhood_sizes,
         n_cell_types: Number of cell types
         device: Computing device ("auto", "cuda", "mps", or "cpu")
         n_evaluations: Number of evaluations for stochastic models
+        seed: Optional integer random seed for reproducibility (NumPy and PyTorch).
     """
+    if seed is not None:
+        np.random.seed(seed)
+        torch.manual_seed(seed)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(seed)
+        print(f"Random seed set to {seed} for reproducibility.")
+
     # Auto-detect best device if needed
     device = get_device(device)
     print(f"Using device: {device}")
@@ -337,6 +418,20 @@ def run_experiment(histories_path, output_dir, neighborhood_sizes,
     print(f"Loading histories from {histories_path}...")
     histories = np.load(histories_path, allow_pickle=True)
     print(f"Loaded {len(histories)} simulations")
+
+    # Train/validation split (80% train, 20% val)
+    n_total = len(histories)
+    n_train = int(0.8 * n_total)
+    train_histories = histories[:n_train]
+    val_histories = histories[n_train:]
+    print(f"Using {n_train} histories for training and {n_total - n_train} for validation.")
+
+    # Sanity check: detect NaN/Inf in histories (can cause loss NaN)
+    for name, hist_list in [("train", train_histories), ("val", val_histories)]:
+        for i, h in enumerate(hist_list):
+            arr = np.asarray(h)
+            if np.isnan(arr).any() or np.isinf(arr).any():
+                print("Warning: {} history at index {} contains NaN or Inf.".format(name, i))
     
     # Training hyperparameters (same as base experiment)
     HIDDEN_DIM = 128
@@ -440,103 +535,86 @@ def run_experiment(histories_path, output_dir, neighborhood_sizes,
             device=device
         )
         
-        # Train Standard NCA
+        # Paths for checkpoints (used by both training and eval_only load)
         std_path = os.path.join(exp_dir, 'standard_nca.pt' if not curriculum else 'standard_nca_curriculum.pt')
         std_loss_path = os.path.join(exp_dir, 'standard_nca_loss_curve.npy' if not curriculum else 'standard_nca_curriculum_loss_curve.npy')
-        if curriculum:
-            print(f"\nTraining Standard NCA with curriculum (nb={nb_size})...")
-            _train_with_schedule(
-                model=nca,
-                model_label=f"Standard NCA (nb={nb_size})",
-                histories=histories,
-                schedule=curriculum_schedule,
-                base_train_kwargs={"n_cell_types": n_cell_types, "device": device, "loss_type": LOSS_TYPE},
-                final_ckpt_path=std_path,
-                loss_curve_path=std_loss_path,
-            )
-        else:
-            if os.path.exists(std_path):
-                print(f"Found {std_path}, loading Standard NCA (nb={nb_size})...")
-                nca.load_state_dict(torch.load(std_path, weights_only=True))
-            else:
-                print(f"\nTraining Standard NCA (nb={nb_size})...")
-                std_losses = train_nca_dyn(
-                    nca, histories,
-                    n_cell_types=n_cell_types,
-                    n_epochs=n_epochs,
-                    time_length=time_length,
-                    update_every=update_every,
-                    device=device,
-                    lr=LEARNING_RATE,
-                    return_losses=True,
-                    loss_type=LOSS_TYPE
-                )
-                torch.save(nca.state_dict(), std_path)
-                print(f"Saved Standard NCA to {std_path}")
-                np.save(std_loss_path, np.asarray(std_losses))
-        
-        # Train NCA with Noise
         gca_path = os.path.join(exp_dir, 'nca_with_noise.pt' if not curriculum else 'nca_with_noise_curriculum.pt')
         gca_loss_path = os.path.join(exp_dir, 'nca_with_noise_loss_curve.npy' if not curriculum else 'nca_with_noise_curriculum_loss_curve.npy')
-        if curriculum:
-            print(f"\nTraining NCA with Noise with curriculum (nb={nb_size})...")
-            # Keep the same relative LR scaling as the non-curriculum path (LR/10)
-            scaled_schedule = [
-                {**p, "lr": p["lr"] / 10.0} for p in curriculum_schedule
-            ]
-            _train_with_schedule(
-                model=nca_with_noise,
-                model_label=f"NCA with Noise (nb={nb_size})",
-                histories=histories,
-                schedule=scaled_schedule,
-                base_train_kwargs={"n_cell_types": n_cell_types, "device": device, "loss_type": LOSS_TYPE},
-                final_ckpt_path=gca_path,
-                loss_curve_path=gca_loss_path,
-            )
-        else:
-            if os.path.exists(gca_path):
-                print(f"Found {gca_path}, loading NCA with Noise (nb={nb_size})...")
-                nca_with_noise.load_state_dict(torch.load(gca_path, weights_only=True))
-            else:
-                print(f"\nTraining NCA with Noise (nb={nb_size})...")
-                gca_losses = train_nca_dyn(
-                    nca_with_noise, histories,
-                    n_cell_types=n_cell_types,
-                    n_epochs=n_epochs,
-                    time_length=time_length,
-                    update_every=update_every,
-                    device=device,
-                    lr=LEARNING_RATE / 10,
-                    return_losses=True,
-                    loss_type=LOSS_TYPE
-                )
-                torch.save(nca_with_noise.state_dict(), gca_path)
-                print(f"Saved NCA with Noise to {gca_path}")
-                np.save(gca_loss_path, np.asarray(gca_losses))
-        
-        # Train Mixture NCA
         mix_path = os.path.join(exp_dir, 'mixture_nca.pt' if not curriculum else 'mixture_nca_curriculum.pt')
         mix_loss_path = os.path.join(exp_dir, 'mixture_nca_loss_curve.npy' if not curriculum else 'mixture_nca_curriculum_loss_curve.npy')
-        if curriculum:
-            print(f"\nTraining Mixture NCA with curriculum (nb={nb_size})...")
-            _train_with_schedule(
-                model=mix_nca,
-                model_label=f"Mixture NCA (nb={nb_size})",
-                histories=histories,
-                schedule=curriculum_schedule,
-                base_train_kwargs={
-                    "n_cell_types": n_cell_types,
-                    "device": device,
-                    "temperature": TEMPERATURE,
-                    "min_temperature": MIN_TEMPERATURE,
-                    "anneal_rate": ANNEAL_RATE,
-                    "loss_type": LOSS_TYPE,
-                    "straight_through": False,
-                },
-                final_ckpt_path=mix_path,
-                loss_curve_path=mix_loss_path,
-            )
+        stoch_path = os.path.join(exp_dir, 'stochastic_mix_nca.pt' if not curriculum else 'stochastic_mix_nca_curriculum.pt')
+        stoch_loss_path = os.path.join(exp_dir, 'stochastic_mix_nca_loss_curve.npy' if not curriculum else 'stochastic_mix_nca_curriculum_loss_curve.npy')
+
+        if eval_only:
+            print(f"\nEval-only mode: loading checkpoints (nb={nb_size})...")
+            if os.path.exists(mix_path):
+                mix_nca.load_state_dict(torch.load(mix_path, weights_only=True))
+                print(f"  Loaded Mixture NCA from {mix_path}")
+            else:
+                raise FileNotFoundError(f"eval_only but Mixture checkpoint not found: {mix_path}")
+            if os.path.exists(stoch_path):
+                stochastic_mix_nca.load_state_dict(torch.load(stoch_path, weights_only=True))
+                print(f"  Loaded Stochastic Mixture NCA from {stoch_path}")
+            else:
+                raise FileNotFoundError(f"eval_only but Stochastic Mixture checkpoint not found: {stoch_path}")
         else:
+            # Train Standard NCA (disabled: only Mixture / Stochastic Mixture used in this run)
+            print(f"\nSkipping Standard NCA training (nb={nb_size}) – focusing on Mixture / Stochastic Mixture.")
+            print(f"Skipping NCA with Noise training (nb={nb_size}) – focusing on Mixture / Stochastic Mixture.")
+        
+        # Train Mixture NCA (skip if eval_only)
+        if not eval_only and curriculum:
+            print(f"\nTraining Mixture NCA with curriculum + early stopping (nb={nb_size})...")
+            # Load from previous phase if resuming
+            if resume_from_phase > 1:
+                prev_phase = resume_from_phase - 1
+                prev_tl = curriculum_schedule[prev_phase - 1]["time_length"]
+                phase_ckpt = mix_path.replace(".pt", "_phase{}_TL{}.pt".format(prev_phase, prev_tl))
+                if os.path.exists(phase_ckpt):
+                    mix_nca.load_state_dict(torch.load(phase_ckpt, weights_only=True))
+                    print("    Resuming: loaded {} (phase {}). Skipping phases 1..{}.".format(phase_ckpt, prev_phase, prev_phase))
+                else:
+                    print("    Warning: resume_from_phase={} but {} not found; starting from scratch.".format(resume_from_phase, phase_ckpt))
+            all_phase_losses = []
+            if resume_from_phase > 1 and os.path.exists(mix_loss_path):
+                try:
+                    all_phase_losses = list(np.load(mix_loss_path))
+                except Exception:
+                    pass
+            for i, phase in enumerate(curriculum_schedule, start=1):
+                if i < resume_from_phase:
+                    continue
+                phase_losses = train_nca_with_early_stopping(
+                    model=mix_nca,
+                    histories=train_histories,
+                    n_cell_types=n_cell_types,
+                    max_epochs=phase["n_epochs"],
+                    time_length=phase["time_length"],
+                    update_every=phase["update_every"],
+                    device=device,
+                    lr=phase["lr"],
+                    loss_type=LOSS_TYPE,
+                    patience=20,
+                    extra_train_kwargs={
+                        "temperature": TEMPERATURE,
+                        "min_temperature": MIN_TEMPERATURE,
+                        "anneal_rate": ANNEAL_RATE,
+                        "straight_through": False,
+                    },
+                )
+                all_phase_losses.extend(phase_losses)
+                # Save intermediate checkpoint so training can be resumed from this phase
+                phase_ckpt = mix_path.replace(".pt", "_phase{}_TL{}.pt".format(i, phase["time_length"]))
+                try:
+                    torch.save(mix_nca.state_dict(), phase_ckpt)
+                    print("    Saved intermediate checkpoint: {}".format(phase_ckpt))
+                except Exception as e:
+                    print("    Warning: could not save intermediate checkpoint {}: {}".format(phase_ckpt, e))
+
+            torch.save(mix_nca.state_dict(), mix_path)
+            print(f"Saved Mixture NCA to {mix_path}")
+            np.save(mix_loss_path, np.asarray(all_phase_losses))
+        elif not eval_only:
             if os.path.exists(mix_path):
                 print(f"Found {mix_path}, loading Mixture NCA (nb={nb_size})...")
                 mix_nca.load_state_dict(torch.load(mix_path, weights_only=True))
@@ -563,29 +641,59 @@ def run_experiment(histories_path, output_dir, neighborhood_sizes,
                 print(f"Saved Mixture NCA to {mix_path}")
                 np.save(mix_loss_path, np.asarray(mix_losses))
         
-        # Train Stochastic Mixture NCA
-        stoch_path = os.path.join(exp_dir, 'stochastic_mix_nca.pt' if not curriculum else 'stochastic_mix_nca_curriculum.pt')
-        stoch_loss_path = os.path.join(exp_dir, 'stochastic_mix_nca_loss_curve.npy' if not curriculum else 'stochastic_mix_nca_curriculum_loss_curve.npy')
-        if curriculum:
-            print(f"\nTraining Stochastic Mixture NCA with curriculum (nb={nb_size})...")
-            _train_with_schedule(
-                model=stochastic_mix_nca,
-                model_label=f"Stochastic Mixture NCA (nb={nb_size})",
-                histories=histories,
-                schedule=curriculum_schedule,
-                base_train_kwargs={
-                    "n_cell_types": n_cell_types,
-                    "device": device,
-                    "milestones": MILESTONES,
-                    "gamma": GAMMA,
-                    "temperature": TEMPERATURE,
-                    "min_temperature": MIN_TEMPERATURE,
-                    "anneal_rate": ANNEAL_RATE,
-                },
-                final_ckpt_path=stoch_path,
-                loss_curve_path=stoch_loss_path,
-            )
-        else:
+        # Train Stochastic Mixture NCA (skip if eval_only)
+        if not eval_only and curriculum:
+            print(f"\nTraining Stochastic Mixture NCA with curriculum + early stopping (nb={nb_size})...")
+            if resume_from_phase > 1:
+                prev_phase = resume_from_phase - 1
+                prev_tl = curriculum_schedule[prev_phase - 1]["time_length"]
+                phase_ckpt = stoch_path.replace(".pt", "_phase{}_TL{}.pt".format(prev_phase, prev_tl))
+                if os.path.exists(phase_ckpt):
+                    stochastic_mix_nca.load_state_dict(torch.load(phase_ckpt, weights_only=True))
+                    print("    Resuming: loaded {} (phase {}). Skipping phases 1..{}.".format(phase_ckpt, prev_phase, prev_phase))
+                else:
+                    print("    Warning: resume_from_phase={} but {} not found; starting from scratch.".format(resume_from_phase, phase_ckpt))
+            all_phase_losses = []
+            if resume_from_phase > 1 and os.path.exists(stoch_loss_path):
+                try:
+                    all_phase_losses = list(np.load(stoch_loss_path))
+                except Exception:
+                    pass
+            for i, phase in enumerate(curriculum_schedule, start=1):
+                if i < resume_from_phase:
+                    continue
+                phase_losses = train_nca_with_early_stopping(
+                    model=stochastic_mix_nca,
+                    histories=train_histories,
+                    n_cell_types=n_cell_types,
+                    max_epochs=phase["n_epochs"],
+                    time_length=phase["time_length"],
+                    update_every=phase["update_every"],
+                    device=device,
+                    lr=phase["lr"],
+                    loss_type=LOSS_TYPE,
+                    patience=20,
+                    extra_train_kwargs={
+                        "milestones": MILESTONES,
+                        "gamma": GAMMA,
+                        "temperature": TEMPERATURE,
+                        "min_temperature": MIN_TEMPERATURE,
+                        "anneal_rate": ANNEAL_RATE,
+                    },
+                )
+                all_phase_losses.extend(phase_losses)
+                # Save intermediate checkpoint so training can be resumed from this phase
+                phase_ckpt = stoch_path.replace(".pt", "_phase{}_TL{}.pt".format(i, phase["time_length"]))
+                try:
+                    torch.save(stochastic_mix_nca.state_dict(), phase_ckpt)
+                    print("    Saved intermediate checkpoint: {}".format(phase_ckpt))
+                except Exception as e:
+                    print("    Warning: could not save intermediate checkpoint {}: {}".format(phase_ckpt, e))
+
+            torch.save(stochastic_mix_nca.state_dict(), stoch_path)
+            print(f"Saved Stochastic Mixture NCA to {stoch_path}")
+            np.save(stoch_loss_path, np.asarray(all_phase_losses))
+        elif not eval_only:
             if os.path.exists(stoch_path):
                 print(f"Found {stoch_path}, loading Stochastic Mixture NCA (nb={nb_size})...")
                 stochastic_mix_nca.load_state_dict(torch.load(stoch_path, weights_only=True))
@@ -623,10 +731,10 @@ def run_experiment(histories_path, output_dir, neighborhood_sizes,
             # Compare distributions
             results_df = compare_generated_distributions(
                 histories=histories,
-                standard_nca=nca.to(device),
+                standard_nca=None,
                 mixture_nca=mix_nca.to(device),
                 stochastic_nca=stochastic_mix_nca.to(device),
-                nca_with_noise=nca_with_noise.to(device),
+                nca_with_noise=None,
                 n_steps=n_steps,
                 n_evaluations=n_evaluations,
                 device=device,
@@ -647,10 +755,8 @@ def run_experiment(histories_path, output_dir, neighborhood_sizes,
                 print(f"    Generating videos for {n_steps} steps...")
                 _generate_videos_for_models(
                     models={
-                        'standard_nca': nca.to(device),
                         'mixture_nca': mix_nca.to(device),
                         'stochastic_nca': stochastic_mix_nca.to(device),
-                        'nca_with_noise': nca_with_noise.to(device)
                     },
                     histories=histories,
                     n_steps=n_steps,
@@ -682,6 +788,8 @@ def run_experiment(histories_path, output_dir, neighborhood_sizes,
             'learning_rate': LEARNING_RATE,
             'curriculum': bool(curriculum),
             'curriculum_schedule': curriculum_schedule if curriculum else None,
+            'seed': seed,
+            'histories_path': os.path.abspath(histories_path),
             'models_saved': {
                 'standard_nca': std_path,
                 'nca_with_noise': gca_path,
@@ -728,10 +836,12 @@ if __name__ == "__main__":
                         help='Comma-separated list of time_length values for curriculum phases (default: 35,100,500)')
     parser.add_argument('--curriculum_epochs', type=str, default='250,150,60',
                         help='Comma-separated list of n_epochs per curriculum phase (default: 250,150,60)')
-    parser.add_argument('--curriculum_lrs', type=str, default='0.001,0.0005,0.0001',
-                        help='Comma-separated list of learning rates per curriculum phase (default: 0.001,0.0005,0.0001)')
+    parser.add_argument('--curriculum_lrs', type=str, default='0.0005,0.0005,0.0001',
+                        help='Comma-separated list of learning rates per curriculum phase (default: 0.0005,0.0005,0.0001)')
     parser.add_argument('--curriculum_update_every', type=str, default='1,1,2',
                         help='Comma-separated list of update_every per curriculum phase (default: 1,1,2)')
+    parser.add_argument('--resume_from_phase', type=int, default=1,
+                        help='Curriculum phase to start from (1=from scratch). Loads phase (N-1) checkpoint and skips earlier phases (e.g. 2=load phase1_TL35.pt, run phase 2,3,...)')
     parser.add_argument('--n_cell_types', type=int, default=6,
                         help='Number of cell types')
     parser.add_argument('--device', type=str, default='auto',
@@ -742,6 +852,10 @@ if __name__ == "__main__":
                         help='Comma-separated list of step lengths to test (default: 25,100,500)')
     parser.add_argument('--generate_videos', action='store_true',
                         help='Generate videos of model evolution')
+    parser.add_argument('--eval_only', action='store_true',
+                        help='Skip training; load existing checkpoints and run only evaluation (and --generate_videos if set)')
+    parser.add_argument('--seed', type=int, default=None,
+                        help='Random seed for reproducibility (NumPy and PyTorch). If not set, runs are non-deterministic.')
     args = parser.parse_args()
     
     sizes = [int(s.strip()) for s in args.neighborhood_sizes.split(',') if s.strip()]
@@ -752,6 +866,7 @@ if __name__ == "__main__":
     step_lengths = [int(s.strip()) for s in args.step_lengths.split(',') if s.strip()]
 
     curriculum_schedule = None
+    resume_from_phase = 1
     if args.curriculum:
         curriculum_schedule = _build_curriculum_schedule(
             time_lengths=_parse_csv_ints(args.curriculum_time_lengths),
@@ -759,6 +874,11 @@ if __name__ == "__main__":
             lrs=_parse_csv_floats(args.curriculum_lrs),
             update_evers=_parse_csv_ints(args.curriculum_update_every),
         )
+        resume_from_phase = max(1, getattr(args, 'resume_from_phase', 1))
+        if resume_from_phase > len(curriculum_schedule):
+            raise ValueError(
+                'resume_from_phase={} but curriculum has only {} phases'.format(
+                    resume_from_phase, len(curriculum_schedule)))
     
     run_experiment(
         histories_path=args.histories_path,
@@ -774,5 +894,8 @@ if __name__ == "__main__":
         generate_videos=args.generate_videos,
         curriculum=args.curriculum,
         curriculum_schedule=curriculum_schedule,
+        resume_from_phase=resume_from_phase,
+        eval_only=args.eval_only,
+        seed=args.seed,
     )
 

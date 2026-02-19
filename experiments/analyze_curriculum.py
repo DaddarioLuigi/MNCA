@@ -228,6 +228,31 @@ def plot_loss_curves(exp_dir: Path, out_dir: Path, nb_sizes: list[int], suffix: 
     plt.close(fig)
     print(f"Saved {out_path}")
 
+    # Same data with log-scale y-axis so initial drop and small differences are visible
+    fig2, axes2 = plt.subplots(1, 2, figsize=(12, 4))
+    for (nb, model_name), loss in curves.items():
+        loss_safe = np.maximum(loss, 1e-8)
+        if "Mixture" in model_name and "Stochastic" not in model_name:
+            ax = axes2[0]
+        else:
+            ax = axes2[1]
+        ax.semilogy(loss_safe, alpha=0.8, label=f"NB={nb}")
+    axes2[0].set_title("Mixture NCA – curriculum loss (log scale)")
+    axes2[0].set_xlabel("Step (concatenated phases)")
+    axes2[0].set_ylabel("Loss (log scale)")
+    axes2[0].legend(loc="best", fontsize=8)
+    axes2[0].grid(True, alpha=0.3)
+    axes2[1].set_title("Stochastic Mixture NCA – curriculum loss (log scale)")
+    axes2[1].set_xlabel("Step (concatenated phases)")
+    axes2[1].set_ylabel("Loss (log scale)")
+    axes2[1].legend(loc="best", fontsize=8)
+    axes2[1].grid(True, alpha=0.3)
+    plt.tight_layout()
+    out_path_log = out_dir / "curriculum_loss_curves_log.png"
+    fig2.savefig(out_path_log, dpi=150, bbox_inches="tight")
+    plt.close(fig2)
+    print(f"Saved {out_path_log}")
+
 
 def summary_table(df: pd.DataFrame, out_dir: Path) -> None:
     """Write a short summary: best NB per (model, step length, metric)."""
