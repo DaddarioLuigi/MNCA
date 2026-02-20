@@ -661,6 +661,155 @@ Several directions could be explored to reduce the gap at long times (see also \
 In summary, the curriculum run confirms what we saw in Step 3: when we train on 500-step trajectories with a phased curriculum, a larger neighborhood still helps, in particular at long evaluation horizons and for the stochastic variant, while the deterministic one exhibits a more mixed trade-off across metrics and horizons. A short takeaway is in \cref{sec:results:takeaway}.
 
 %----------------------------------------------------------
+\section{BBBC031 microscopy segmentation experiment}
+\label{sec:impl:bbbc031}
+%----------------------------------------------------------
+
+To complement the synthetic tissue experiments, we ran a separate experiment on a real imaging dataset: BBBC031, a public benchmark for cell segmentation in fluorescence microscopy.
+This section describes the dataset, the motivation for the experiment, the setup and results obtained so far, their interpretation, and the planned re-training for the larger neighborhood size with a view to reporting updated results once that training is complete.
+
+\subsection{The BBBC031 dataset}
+\label{sec:impl:bbbc031:dataset}
+
+BBBC031 is a publicly available dataset from the Broad Bioimage Benchmark Collection~\cite{bbbc031_ref} (BBBC).
+It consists of fluorescence microscopy images of human U2OS cells, with ground-truth annotations that include cell centroids and, for a subset of images, full cell masks.
+The mask images are provided in RGBA format: the alpha channel (or the composite of RGB and alpha) indicates the segmented cell regions.
+We use these cell-mask images as the \emph{target} for the NCA: the model is trained to grow a segmentation from a small set of seed points (the annotated centroids) until it matches the ground-truth mask.
+
+This task is conceptually similar to the synthetic tissue experiments---the model must learn a local update rule that, when iterated from an initial state (seeds on a grid), produces a desired spatial pattern---but the target is a real microscopy image rather than a simulated history.
+It therefore serves as a sanity check and a bridge toward real-world imaging applications: if the same Stochastic Mixture NCA framework can learn to segment cells from seeds on BBBC031, it supports the generality of the approach; at the same time, the fixed image resolution (we resize to \(96\times96\)) and the small number of images used keep the experiment manageable and reproducible (e.g., on Google Colab).
+
+\subsection{Motivation for the experiment}
+\label{sec:impl:bbbc031:motivation}
+
+The main thesis experiments use a synthetic tissue simulator and focus on the effect of neighborhood size (\(NB\)) and curriculum design on long-horizon behavior.
+We wanted to test whether the same MNCA architecture and training pipeline could be applied in a different setting: \emph{image-based segmentation} from seed points, with a single static target image per training run (rather than a time series of grids).
+The goals were:
+\begin{itemize}
+  \item to verify that the extended Stochastic Mixture NCA (with configurable neighborhood size) can be trained on real microscopy data;
+  \item to compare two neighborhood sizes, \(NB=3\) and \(NB=7\), under the same optimization schedule, and to observe whether the loss and segmentation quality behave similarly to what we saw in the synthetic experiments (where \(NB\ge2\) helped and very small \(NB\) was insufficient);
+  \item to produce quantitative metrics (IoU, Dice, MSE on the predicted vs.\ ground-truth mask) suitable for the thesis and for comparison with the synthetic results.
+\end{itemize}
+
+The training protocol mirrors the one used in the reference MNCA microscopy setup: we train on one image at a time (one cell-mask target per run), with a pool of states and random rollout lengths between 10 and 20 steps per optimization step; we run 4000 optimization steps (gradient updates) with Adam and a multi-step learning-rate schedule.
+At inference we run the model for a fixed number of \emph{simulation} steps (20) from the seed state to obtain the final predicted mask; this is the number that appears in the comparison figures (e.g., ``MNCA after 20 steps'').
+It is important to distinguish \textbf{4000 training steps} (number of weight updates) from \textbf{20 simulation steps} (number of NCA updates used to generate the output image): the former is the length of optimization; the latter is the length of the rollout at evaluation.
+
+\subsection{Experimental setup}
+\label{sec:impl:bbbc031:setup}
+
+We selected five images from BBBC031 that have corresponding cell-mask annotations (same ordering as in the Colab notebook: the first five such images in the ground-truth annotations).
+For each image we trained two models: one with neighborhood size \(NB=3\) and one with \(NB=7\), using the Stochastic Mixture NCA (Extended Mixture NCA with noise), with the same hyperparameters (learning rate \(10^{-3}\), milestones at 1500 and 3000 steps, target size \(96\times96\), 24 state channels, 5 rules, hidden dimension 128).
+Each run produces a saved checkpoint and a loss history (one scalar per optimization step).
+After training, we run inference with 20 simulation steps, compare the predicted RGBA output to the ground-truth mask, and compute IoU (intersection over union) and Dice coefficient on the binarized alpha channel (threshold 0.5), and MSE on the full RGBA channels (same as the training loss).
+The metrics are aggregated in a table for the thesis (\cref{tab:bbbc031_metrics}).
+
+\subsection{Results obtained}
+\label{sec:impl:bbbc031:results}
+
+Training for 4000 steps with the default learning rate yielded a clear asymmetry between the two neighborhood sizes.
+
+\paragraph{Loss curves.}
+For \textbf{\(NB=3\)}, all five images converged to low loss: the final loss values are on the order of \(10^{-4}\)--\(10^{-3}\), and the mean loss over the last 200 steps is similarly low.
+For \textbf{\(NB=7\)}, two images (img0 and img1) exhibited \emph{divergent} training: the loss rose to values on the order of \(10^3\) and did not recover.
+The other three images (img2--img4) reached much lower loss than img0/img1 but still an order of magnitude or more above the typical \(NB=3\) loss (final loss roughly in the range 10--80 vs.\ \(10^{-4}\)--\(10^{-3}\) for \(NB=3\)).
+A trend analysis over the last 500 steps shows that the loss for \(NB=7\) was still slightly decreasing (negative slope) in all cases, but for the diverged runs the absolute level is so high that simply extending the same training would not be practical; for the non-diverged runs the loss might decrease further with more steps or a lower learning rate.
+Figures~\ref{fig:impl:bbbc031:loss_curves} and~\ref{fig:impl:bbbc031:loss_by_nb} show the training loss per run and the comparison by neighborhood size (smoothed curves).
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{figs/bbbc031/bbbc031_loss_curves.png}
+  \caption{BBBC031: training loss per run (one panel per image and neighborhood size). Each panel shows raw loss and a smoothed curve over 4000 optimization steps. \(NB=3\) runs converge to low values; \(NB=7\) runs either diverge (img0, img1) or settle at higher loss (img2--img4).}
+  \label{fig:impl:bbbc031:loss_curves}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{figs/bbbc031/bbbc031_loss_by_NB.png}
+  \caption{BBBC031: loss comparison by neighborhood size. Smoothed training loss for each of the five images, separately for \(NB=3\) (left) and \(NB=7\) (right). The gap between the two neighborhood sizes is evident.}
+  \label{fig:impl:bbbc031:loss_by_nb}
+\end{figure}
+
+\paragraph{Segmentation metrics.}
+\Cref{tab:bbbc031_metrics} reports IoU, Dice, and MSE (RGBA) per image and per neighborhood size.
+For \(NB=3\), IoU and Dice are high (IoU \(\approx 0.99\)--\(1.0\), Dice \(\approx 0.996\)--\(1.0\)) and MSE is low (\(\sim 10^{-4}\)--\(10^{-3}\)), consistent with the low training loss and with the qualitative appearance of the predicted masks.
+For \(NB=7\), IoU and Dice are low (IoU in the range 0.03--0.37, Dice 0.06--0.54) and MSE is high (\(\sim 0.29\)--0.33), reflecting the failed or poor training for that neighborhood size under the current hyperparameters.
+
+\input{tables/bbbc031_metrics.tex}
+
+\paragraph{Qualitative comparison.}
+Figure~\ref{fig:impl:bbbc031:target_seed} shows an example of the ground-truth cell mask and the seed points (centroids) used to initialize the NCA.
+Figures~\ref{fig:impl:bbbc031:gt_vs_nb3} and~\ref{fig:impl:bbbc031:gt_vs_nb7} compare the ground truth with the model output after 20 simulation steps for \(NB=3\) and \(NB=7\) respectively (example from the same image).
+With \(NB=3\), the predicted mask aligns well with the ground truth; with \(NB=7\), the current checkpoint produces a poor segmentation, in line with the high loss and low IoU/Dice.
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=0.7\textwidth]{figs/bbbc031/bbbc031_target_and_seed.png}
+  \caption{BBBC031: ground-truth cell mask and seed points (cell centroids from the dataset annotations). The NCA is initialized from these seeds and run for 20 steps to produce the predicted segmentation.}
+  \label{fig:impl:bbbc031:target_seed}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{figs/bbbc031/bbbc031_gt_vs_mnca_trained_here_NB3_stochastic.png}
+  \caption{BBBC031: ground truth vs.\ Stochastic Mixture NCA prediction after 20 simulation steps, neighborhood size \(NB=3\). The model was trained for 4000 optimization steps; the predicted mask matches the target well.}
+  \label{fig:impl:bbbc031:gt_vs_nb3}
+\end{figure}
+
+\begin{figure}[H]
+  \centering
+  \includegraphics[width=\textwidth]{figs/bbbc031/bbbc031_gt_vs_mnca_trained_here_NB7_stochastic.png}
+  \caption{BBBC031: ground truth vs.\ Stochastic Mixture NCA prediction after 20 simulation steps, neighborhood size \(NB=7\). Same training length (4000 steps) and learning rate as \(NB=3\); the loss diverged or remained high, and the predicted mask does not match the target.}
+  \label{fig:impl:bbbc031:gt_vs_nb7}
+\end{figure}
+
+\subsection{Interpretation}
+\label{sec:impl:bbbc031:interpretation}
+
+The results are consistent with the hypothesis that, under the \emph{same} optimization schedule (learning rate, number of steps, pool size, etc.), the larger neighborhood \(NB=7\) is harder to train than \(NB=3\) on this task.
+For \(NB=3\), the model has fewer parameters in the perception pathway and a smaller receptive field; optimization is stable and reaches a good minimum.
+For \(NB=7\), the perception kernels are larger and the dynamics may be more sensitive to the learning rate; with the default \(10^{-3}\), two of the five runs diverged and the other three converged to a worse minimum than \(NB=3\).
+
+This does not imply that \(NB=7\) is inherently unsuitable for BBBC031.
+Rather, it suggests that training with \(NB=7\) requires different hyperparameters---in particular a \emph{lower learning rate} and possibly a longer or differently scheduled optimization---so that the model can converge to a competitive solution instead of diverging or stalling at high loss.
+In the synthetic experiments we observed that neighborhood size has a measurable effect on long-horizon behavior and that larger \(NB\) can improve distributional and sometimes spatial metrics when training is stable; the BBBC031 experiment extends that comparison to a real imaging dataset and shows that stability of training itself can depend on \(NB\) when other hyperparameters are held fixed.
+
+\subsection{Re-training for \(NB=7\): parameters and motivation}
+\label{sec:impl:bbbc031:retrain}
+
+Given the current results, continuing the existing \(NB=7\) runs for more steps with the same learning rate is unlikely to help: for the diverged runs (img0, img1) the loss is already in the thousands, and for the others the gain from a few extra thousand steps would be limited.
+We therefore \textbf{re-train the \(NB=7\) models} from scratch with different hyperparameters, chosen so that optimization remains stable while still allowing convergence to a good minimum.
+
+\paragraph{Parameters used for NB=7 re-training.}
+For \(NB=7\) we use:
+\begin{itemize}
+  \item \textbf{Learning rate:} \(3\times10^{-4}\) (instead of \(10^{-3}\) used for \(NB=3\)).
+  \item \textbf{Optimization steps:} 6000 (instead of 4000).
+  \item \textbf{LR schedule milestones:} 2500 and 4500 (so the learning rate is reduced at roughly 1/3 and 2/3 of the run, preserving the same relative schedule as for \(NB=3\) with milestones at 1500 and 3000).
+\end{itemize}
+All other hyperparameters (batch size, pool size, min/max simulation steps per episode, target size, architecture) are unchanged and match the \(NB=3\) runs.
+The Colab notebook that runs the training is updated so that it applies these settings automatically when \(nb=7\); for \(nb=3\) it keeps the original defaults (learning rate \(10^{-3}\), 4000 steps, milestones 1500 and 3000).
+
+\paragraph{Motivation for these choices.}
+With the default learning rate \(10^{-3}\), the \(NB=7\) model has a larger and more sensitive parameterization (larger perception kernels and more weights in the extended neighborhood pathway), and the loss either diverged (img0, img1) or converged to a poor minimum (img2--img4).
+\emph{Reducing the learning rate} to \(3\times10^{-4}\) is a standard way to stabilize training when the same schedule leads to divergence or high loss: smaller updates limit overshooting and allow the optimizer to settle into a better basin.
+We do not go as low as \(10^{-4}\) in the first re-run so that training remains reasonably fast while still being stable; if needed, a further run with \(10^{-4}\) can be tried.
+\emph{Increasing the number of steps} to 6000 compensates for the smaller learning rate: each update is smaller, so more updates are needed to reach a comparable reduction in loss; 6000 steps with LR \(3\times10^{-4}\) give the optimizer more time to converge without changing the per-step cost.
+\emph{Adjusting the milestones} to 2500 and 4500 keeps the same relative schedule (two decay points at about 1/3 and 2/3 of the run), so the learning rate drops in the second half of training in a way that is consistent with the \(NB=3\) setup.
+Together, these choices are intended to yield stable, convergent training for \(NB=7\) on all five images, so that we can fairly compare segmentation quality (IoU, Dice, MSE) and qualitative appearance between \(NB=3\) and \(NB=7\) under conditions where both neighborhood sizes have converged.
+
+\paragraph{Placeholder for updated results.}
+Once the re-training for \(NB=7\) is complete, the following should be updated in this section:
+\begin{itemize}
+  \item the loss curves (and, if available, the corresponding analysis plots) to include the new \(NB=7\) runs;
+  \item Table~\ref{tab:bbbc031_metrics} (and the underlying data), by re-running the metrics pipeline on the new checkpoints so that the \(NB=7\) columns reflect the re-trained models;
+  \item the qualitative comparison figures for \(NB=7\) (e.g., Figure~\ref{fig:impl:bbbc031:gt_vs_nb7}) if new side-by-side figures are produced;
+  \item a short paragraph summarizing the updated comparison: whether \(NB=7\) with the new schedule reaches similar or better IoU/Dice/MSE than \(NB=3\), and how the two neighborhood sizes compare qualitatively.
+\end{itemize}
+
+No quantitative or qualitative results from the re-trained \(NB=7\) runs are included in the current thesis version; the space above is reserved for that update.
+
+%----------------------------------------------------------
 \section{Threats to validity}
 \label{sec:impl:threats}
 %----------------------------------------------------------
