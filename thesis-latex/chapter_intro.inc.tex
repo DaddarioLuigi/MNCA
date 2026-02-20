@@ -12,7 +12,7 @@
 
 Tissues and other multicellular structures arise from the repeated application of local rules: cells divide, differentiate, migrate, and respond to signals from their immediate neighborhood.
 No single cell holds a global blueprint; instead, large-scale morphology and function emerge from many spatially distributed, short-range interactions.
-Understanding how such local rules give rise to stable patterns and robust growth is a central question in developmental and systems biology, and it has motivated a long tradition of computational models that emphasize locality and discreteness \cite{ca_vonneumann1966,ca_wolfram2002}.
+Understanding how such local rules give rise to stable patterns and robust growth is a central question in developmental and systems biology, and it has motivated a long tradition of computational models that emphasize locality and discreteness \cite{ca_vonneumann1966}.
 
 This thesis focuses on a class of such models: neural cellular automata \cite{nca_mordvintsev2020} trained to imitate tissue-like dynamics.
 We are interested in whether these models can not only reproduce short-term transitions from data but also maintain coherent, biologically plausible behavior when run autonomously over long horizons.
@@ -24,7 +24,7 @@ We therefore assess Mixture Neural Cellular Automata (MNCA) \cite{mnca_milite202
 \label{sec:intro:why_ca}
 %-------------------------------------------------------------------
 
-Cellular automata (CA) \cite{ca_vonneumann1966,ca_wolfram2002} provide one of the simplest frameworks for studying emergence from local rules: a discrete grid of cells is updated in parallel according to a fixed rule that depends only on each cell's state and that of its neighbors.
+Cellular automata (CA) \cite{ca_vonneumann1966} provide one of the simplest frameworks for studying emergence from local rules: a discrete grid of cells is updated in parallel according to a fixed rule that depends only on each cell's state and that of its neighbors.
 They have been used for decades to model physical, chemical, and biological phenomena, from pattern formation to morphogenesis, without requiring continuous equations or global coordination.
 This makes them a natural fit when the phenomenon of interest is inherently local and when interpretability and parsimony matter.
 
