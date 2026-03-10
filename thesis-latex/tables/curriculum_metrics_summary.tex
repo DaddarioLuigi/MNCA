@@ -10,11 +10,11 @@ KL Divergence & Distributional & \(NB=5\) (plateau after \(NB=3\)) & \(NB=5\) (l
 Chi-Square & Distributional & \(NB=3\) (degrades at \(NB=5\)) & \(NB=5\) (lowest) \\
 Categorical MMD & Distributional & \(NB=3\) (slight rise at \(NB=5\)) & \(NB=5\) (lowest) \\
 \midrule
-Tumor Size Diff & Spatial & \(NB=2\) (peaks at \(NB=3\)) & \(NB=5\) (recovers after \(NB=3\) peak) \\
+Tumour Size Diff & Spatial & \(NB=2\) (peaks at \(NB=3\)) & \(NB=5\) (recovers after \(NB=3\) peak) \\
 Border Size Diff & Spatial & \(NB=3\) (best) & \(NB=5\) (poor at \(NB=3\), then recovers) \\
 Spatial Variance Diff & Spatial & \(NB=3\) (best; worsens at \(NB=5\)) & \(NB=5\) (peak at \(NB=3\), then best) \\
 \bottomrule
 \end{tabulary}
-\caption{Curriculum experiment: summary of which neighborhood size yields the best mean value (over step lengths 25, 100, 500) for each metric and model. ``Type'' distinguishes distributional (global statistics) vs.\ spatial (geometry/structure). The deterministic model often peaks at \(NB=3\) on spatial metrics; the stochastic model peaks in error at \(NB=3\) on spatial metrics then improves at \(NB=5\).}
+\caption{Curriculum experiment: summary of which neighbourhood size yields the best mean value (over step lengths 25, 100, 500) for each metric and model. ``Type'' distinguishes distributional (global statistics) vs.\ spatial (geometry/structure). The deterministic model often peaks at \(NB=3\) on spatial metrics; the stochastic model peaks in error at \(NB=3\) on spatial metrics then improves at \(NB=5\).}
 \label{tab:impl:curriculum:metrics_summary}
 \end{table}

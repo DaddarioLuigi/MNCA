@@ -1,28 +1,12 @@
 \chapter*{Abstract}
 
-\paragraph{What is the abstract?}
+This thesis investigated Mixture Neural Cellular Automata (MNCA) for modelling tissue-like dynamics, with emphasis on whether extending the spatial neighbourhood size (\(NB\)) improves learning and long-horizon stability. Neural cellular automata learn local update rules from data; the amount of spatial context each cell receives is controlled by \(NB\). We asked how this choice affects the ability of MNCA to maintain coherent, biologically plausible behaviour when run autonomously over long rollouts.
 
-The abstract is an important component of your thesis. It is likely the first substantive description of your work read by an external examiner. You should view it as an opportunity to set accurate expectations.
-The abstract is a summary of the whole thesis. It presents all the major elements of your work in a highly condensed form.
-It is not merely an introduction in the sense of a preface or advance organizer that prepares the reader for the thesis. It must be capable of substituting for the whole thesis when there is insufficient time and space for the full text.
+We used a synthetic tissue-growth simulator to generate supervised trajectories that reproduce key aspects of tissue-like dynamics. Using these data, we trained MNCA and Stochastic Mixture NCA across multiple neighbourhood sizes and evaluated them under free rollout at several horizons. In a controlled neighbourhood sweep (Step~3) we varied only \(NB\); its effect on performance was assessed with non-parametric tests. We also evaluated Stochastic Mixture NCA on the synthetic cell-imaging benchmark BBBC031, where the model grows a mask from seed points toward a ground-truth target. On BBBC031, we trained MNCA on this benchmark. Given the exploratory nature of the experiment and the objective of analysing learning dynamics rather than generalisation, models were evaluated in-sample (each model on the same image it was trained on); larger neighbourhoods were harder to optimise unless learning rate and training length were adapted.
 
-\paragraph{Size and Structure.}
+The results show that neighbourhood size is a key determinant of performance. Beyond a minimal local context, performance did not seem to improve monotonically with \(NB\): different neighbourhood sizes induced different trade-offs between global distributional accuracy and spatial structure, and the ``best'' setting depended on which metric was prioritised and on the rollout horizon used for evaluation. In long-horizon free rollout (curriculum evaluation at 100 and 500 steps), the stochastic variant was more reliable and tended to outperform the deterministic one on distributional metrics (e.g., categorical MMD around 0.04 to 0.05 at \(NB=5\)), while the deterministic model could remain competitive on spatial metrics at intermediate neighbourhoods. The evaluation protocol strongly influenced interpretability: alignment between training and free-rollout evaluation and the use of multiple rollout horizons were necessary to observe these effects, which could otherwise be masked by exposure bias.
 
-Typical lenghts are within 200 and 300 words (without sections).
-An abstract has to live as a stand-alone text.
-The structure should mirror the structure of the whole thesis, and should represent all its major elements.
-For example, if the thesis has five chapters (introduction, literature review, methodology, results, conclusion), there should be one or more sentences assigned to summarize each chapter.
-
-\paragraph{Clearly Specify Your Research Questions.}
-
-As in the thesis itself, your research questions are critical in ensuring that the abstract is coherent and logically structured. They form the skeleton to which other elements adhere.
-They should be presented near the beginning of the abstract.
-
-\paragraph{Don't Forget the Results.}
-
-The most common error in abstracts is failure to present results.
-The primary function of your thesis (and by extension your abstract) is not to tell readers what you did, it is to tell them what you discovered. Other information, such as the account of your research methods, is needed mainly to back the claims you make about your results.
-Approximately the last half of the abstract should be dedicated to summarizing and interpreting your results.
+In conclusion, the experiments show that MNCA can reproduce tissue-like dynamics in a controlled synthetic setting, but that neighbourhood size and stochasticity change the long-horizon regime: once \(NB\ge2\), performance is non-monotonic and metric-dependent, and stable free-rollout behaviour requires evaluating at multiple horizons and keeping the train--evaluation protocol aligned.
 
 \thispagestyle{empty}
 \mbox{}

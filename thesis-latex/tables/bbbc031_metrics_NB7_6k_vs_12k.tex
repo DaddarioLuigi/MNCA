@@ -1,0 +1,20 @@
+% NB=7 6000 vs 12000 steps metrics (auto-generated)
+% Requires \usepackage{booktabs} in the preamble.
+\begin{table}[H]
+\centering
+\caption{BBBC031: segmentation metrics for NB=7 re-trained run at 6000 steps vs extended run at 12000 steps (LR $3\times10^{-4}$, milestones at 4500, 6000, 7500, 9500).}
+\label{tab:bbbc031_NB7_6k_vs_12k}
+\vspace{0.5em}
+\begin{tabular}{c|ccc|ccc|ccc}
+\toprule
+Image & \multicolumn{3}{c}{6k steps} & \multicolumn{3}{c}{12k steps} & \multicolumn{3}{c}{$\Delta$ (12k $-$ 6k)} \\
+(idx) & IoU & Dice & MSE & IoU & Dice & MSE & IoU & Dice & MSE \\
+\midrule
+0 & 0.299 & 0.460 & 3.5363e-01 & 0.330 & 0.496 & 4.2480e-01 & +0.031 & +0.036 & +7.1169e-02 \\
+1 & 0.373 & 0.544 & 4.0621e-01 & 0.420 & 0.592 & 3.3443e-01 & +0.047 & +0.048 & -7.1774e-02 \\
+2 & 0.288 & 0.447 & 3.6465e-01 & 0.483 & 0.651 & 4.4987e-01 & +0.195 & +0.204 & +8.5217e-02 \\
+3 & 0.089 & 0.163 & 3.2662e-01 & 0.424 & 0.595 & 4.3512e-01 & +0.335 & +0.432 & +1.0850e-01 \\
+4 & 0.405 & 0.576 & 4.3086e-01 & 0.991 & 0.996 & 2.4332e-01 & +0.586 & +0.419 & -1.8754e-01 \\
+\bottomrule
+\end{tabular}
+\end{table}

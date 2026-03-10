@@ -1,9 +1,3 @@
-@misc{example-citation,
-  author = {Tullio Facchinetti},
-  title = {How to write a thesis in LaTeX},
-  note = {\url{http://robot.unipv.it/toolleeo}, Last Access 2021.06.21},
-  year = {2021}
-}
 
 @misc{pytorch,
   title        = {PyTorch: An open source machine learning framework},
@@ -43,6 +37,16 @@
   note      = {Edited by Arthur W. Burks.},
 }
 
+@book{ca_hawkins2024,
+  title     = {The Mathematics of Cellular Automata},
+  author    = {Hawkins, Jane},
+  year      = {2024},
+  series    = {Student Mathematical Library},
+  volume    = {108},
+  publisher = {American Mathematical Society},
+  isbn      = {978-1-4704-7537-6},
+}
+
 @article{ca_gilpin2019,
   title   = {Cellular automata as convolutional neural networks},
   author  = {Gilpin, William},
@@ -52,18 +56,6 @@
   number  = {3},
   pages   = {032402},
   doi     = {10.1103/PhysRevE.100.032402},
-}
-
-% Placeholder entries for topics explicitly mentioned in the thesis plan.
-% These are cited in the State-of-the-Art chapter but can be replaced with
-% the exact target papers once selected/finalized.
-
-@misc{gca_placeholder,
-  title        = {Growing Cellular Automata (placeholder reference)},
-  author       = {TODO},
-  year         = {TODO},
-  howpublished = {TODO},
-  note         = {To be replaced with the intended GCA reference(s).},
 }
 
 @inproceedings{hnca_pande2023,
@@ -86,11 +78,22 @@
 }
 
 @misc{bbbc031_ref,
-  title        = {BBBC031: Human U2OS cells (dataset)},
+  title        = {BBBC031: Simulated 24-well plate with synthetic cells (dataset)},
   author       = {{Broad Institute}},
   year         = {2012},
   howpublished = {Broad Bioimage Benchmark Collection (BBBC)},
-  note         = {\url{https://bbbc.broadinstitute.org/BBBC031}},
+  note         = {Synthetic dataset (SIMCEP-generated). \url{https://bbbc.broadinstitute.org/BBBC031}},
+}
+
+@article{lehmussola2007simcep,
+  title   = {Computational Framework for Simulating Fluorescence Microscope Images With Cell Populations},
+  author  = {Lehmussola, Antti and Ruusuvuori, Pekka and Selinummi, Jyrki and Huttunen, Heikki and Yli-Harja, Olli},
+  year    = {2007},
+  journal = {IEEE Transactions on Medical Imaging},
+  volume  = {26},
+  number  = {7},
+  pages   = {1010--1016},
+  doi     = {10.1109/TMI.2007.897392},
 }
 
 % --- References 10--14 (added on request) ---
@@ -119,14 +122,6 @@
   note      = {arXiv preprint arXiv:2203.15121},
 }
 
-@article{tdl_hajij2024_tpami,
-  title   = {Topological Deep Learning: Going Beyond Graphs},
-  author  = {Hajij, M. and others},
-  year    = {2024},
-  journal = {IEEE Transactions on Pattern Analysis and Machine Intelligence},
-  doi     = {10.1109/TPAMI.2024.3456789},
-}
-
 @inproceedings{hnn_ca_greydanus2021,
   title     = {Hamiltonian Neural Networks Meet Cellular Automata: Learning Conservative Dynamics},
   author    = {Greydanus, S. and Dzamba, M. and Yosinski, J.},
@@ -146,19 +141,31 @@
   pages   = {107892},
 }
 
-@misc{nca_jeandelle2023_teacher,
-  title        = {Teacher Forcing in Differentiable Cellular Automata: Balancing Short-term Fidelity and Long-term Stability},
-  author       = {Jeandelle, P. and others},
-  year         = {2023},
+@misc{exposurebias_wang2020,
+  title        = {On Exposure Bias, Hallucination and Domain Shift in Neural Machine Translation},
+  author       = {Wang, Chaojun and Sennrich, Rico},
+  year         = {2020},
   howpublished = {arXiv preprint},
-  note         = {arXiv:2307.04567},
+  note         = {arXiv:2005.03642},
 }
 
-@inproceedings{mmd_sun2022,
-  title     = {MMD Graph Kernel: Effective Metric Learning for Cellular Automata Distributions},
-  author    = {Sun, Y. and others},
-  year      = {2022},
-  booktitle = {International Conference on Machine Learning (ICML)},
+@inproceedings{bengio2015scheduled_sampling,
+  title     = {Scheduled Sampling for Sequence Prediction with Recurrent Neural Networks},
+  author    = {Bengio, Samy and Vinyals, Oriol and Jaitly, Navdeep and Shazeer, Noam},
+  booktitle = {Advances in Neural Information Processing Systems (NeurIPS)},
+  year      = {2015},
+  note      = {arXiv:1506.03099},
+}
+
+@article{topox_hajij2024,
+  title   = {TopoX: A Suite of Python Packages for Machine Learning on Topological Domains},
+  author  = {Hajij, Mustafa and Papillon, Mathilde and Frantzen, Florian and Agerberg, Jens and AlJabea, Ibrahem and Ballester, Rub{\'e}n and Battiloro, Claudio and Bern{\'a}rdez, Guillermo and Birdal, Tolga and Brent, Aiden and Chin, Peter and Escalera, Sergio and Fiorellino, Simone and Gardaa, Odin Hoff and Gopalakrishnan, Gurusankar and Govil, Devendra and Hoppe, Josef and Karri, Maneel Reddy and Khouja, Jude and Lecha, Manuel and Livesay, Neal and Mei{\ss}ner, Jan and Mukherjee, Soham and Nikitin, Alexander and Papamarkou, Theodore and Pr{\'i}lepok, Jaro and Ramamurthy, Karthikeyan Natesan and Rosen, Paul and Guzm{\'a}n-S{\'a}enz, Aldo and Salatiello, Alessandro and Samaga, Shreyas N. and Scardapane, Simone and Schaub, Michael T. and Scofano, Luca and Spinelli, Indro and Telyatnikov, Lev and Truong, Quang and Walters, Robin and Yang, Maosheng and Zaghen, Olga and Zamzmi, Ghada and Zia, Ali and Miolane, Nina},
+  journal = {Journal of Machine Learning Research},
+  year    = {2024},
+  volume  = {25},
+  number  = {374},
+  pages   = {1--8},
+  url     = {http://jmlr.org/papers/v25/24-0110.html},
 }
 
 @article{nca_jeandelle2024_breast,
@@ -178,4 +185,255 @@
   year         = {2022},
   howpublished = {\url{https://streamlit.io}},
   note         = {Version 1.28 used for interactive MNCA dashboard.},
+}
+
+@book{gibbons_chakraborti2020,
+  title     = {Nonparametric Statistical Inference},
+  author    = {Gibbons, Jean Dickinson and Chakraborti, Subhabrata},
+  year      = {2020},
+  edition   = {6th},
+  publisher = {Chapman and Hall/CRC},
+  address   = {Boca Raton, FL},
+  isbn      = {978-1-138-08744-6},
+}
+
+@inproceedings{bengio2009curriculum,
+  title     = {Curriculum Learning},
+  author    = {Bengio, Yoshua and Louradour, J{\'e}r{\^o}me and Collobert, Ronan and Weston, Jason},
+  booktitle = {Proceedings of the 26th Annual International Conference on Machine Learning (ICML)},
+  year      = {2009},
+  pages     = {41--48},
+  publisher = {ACM},
+}
+
+@article{wilkinson2016fair,
+  title   = {The {FAIR} Guiding Principles for Scientific Data Management and Stewardship},
+  author  = {Wilkinson, Mark D. and Dumontier, Michel and Aalbersberg, IJsbrand Jan and others},
+  journal = {Scientific Data},
+  year    = {2016},
+  volume  = {3},
+  number  = {160018},
+  doi     = {10.1038/sdata.2016.18},
+}
+
+@inproceedings{jang2017gumbel,
+  title     = {Categorical Reparameterization with Gumbel-Softmax},
+  author    = {Jang, Eric and Gu, Shixiang and Poole, Ben},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2017},
+}
+
+@inproceedings{maddison2017concrete,
+  title     = {The Concrete Distribution: A Continuous Relaxation of Discrete Random Variables},
+  author    = {Maddison, Chris J. and Mnih, Andriy and Teh, Yee Whye},
+  booktitle = {International Conference on Learning Representations (ICLR)},
+  year      = {2017},
+}
+
+@article{gretton2012mmd,
+  title   = {A Kernel Two-Sample Test},
+  author  = {Gretton, Arthur and Borgwardt, Karsten and Rasch, Malte and Sch{\"o}lkopf, Bernhard and Smola, Alexander},
+  journal = {Journal of Machine Learning Research},
+  volume  = {13},
+  pages   = {723--773},
+  year    = {2012},
+}
+
+@article{ljosa2012annotated,
+  title   = {Annotated High-Throughput Microscopy Image Sets for Validation},
+  author  = {Ljosa, Vebj{\o}rn and Sokolnicki, Katherine L. and Carpenter, Anne E.},
+  journal = {Nature Methods},
+  volume  = {9},
+  number  = {7},
+  pages   = {637--637},
+  year    = {2012},
+}
+
+@article{rogers2011morphogen,
+  title   = {Morphogen Gradients: From Generation to Interpretation},
+  author  = {Rogers, Katherine W. and Schier, Alexander F.},
+  journal = {Annual Review of Cell and Developmental Biology},
+  volume  = {27},
+  pages   = {377--407},
+  year    = {2011},
+}
+
+@article{noble2022spatial,
+  title   = {Spatial Structure Governs the Mode of Tumour Evolution},
+  author  = {Noble, Robert and others},
+  journal = {Nature Ecology \& Evolution},
+  volume  = {6},
+  number  = {2},
+  pages   = {207--217},
+  year    = {2022},
+}
+
+@article{seferbekova2023spatial,
+  title   = {Spatial Biology of Cancer Evolution},
+  author  = {Seferbekova, Zaira and others},
+  journal = {Nature Reviews Genetics},
+  volume  = {24},
+  number  = {5},
+  pages   = {295--313},
+  year    = {2023},
+}
+
+@book{goodfellow2016deep,
+  title     = {Deep Learning},
+  author    = {Goodfellow, Ian and Bengio, Yoshua and Courville, Aaron},
+  publisher = {MIT Press},
+  year      = {2016},
+  note      = {\url{http://www.deeplearningbook.org}},
+}
+
+@book{szeliski2022computer,
+  title     = {Computer Vision: Algorithms and Applications},
+  author    = {Szeliski, Richard},
+  edition   = {2nd},
+  publisher = {Springer},
+  year      = {2022},
+}
+
+@article{maierhein2024metrics,
+  title   = {Metrics reloaded: recommendations for image analysis validation},
+  author  = {Maier-Hein, Lena and others},
+  journal = {Nature Methods},
+  volume  = {21},
+  pages   = {195--212},
+  year    = {2024},
+}
+
+@article{harris2020numpy,
+  title   = {Array programming with {NumPy}},
+  author  = {Harris, Charles R. and others},
+  journal = {Nature},
+  volume  = {585},
+  number  = {7825},
+  pages   = {357--362},
+  year    = {2020},
+}
+
+@software{reback2020pandas,
+  author    = {{The pandas development team}},
+  title     = {pandas-dev/pandas: Pandas},
+  year      = {2020},
+  publisher = {Zenodo},
+  doi       = {10.5281/zenodo.3509138},
+  url       = {https://doi.org/10.5281/zenodo.3509138},
+}
+
+@article{kingma2014adam,
+  title   = {Adam: A Method for Stochastic Optimization},
+  author  = {Kingma, Diederik P. and Ba, Jimmy},
+  journal = {arXiv preprint arXiv:1412.6980},
+  year    = {2014},
+}
+
+@article{werbos1990backpropagation,
+  title   = {Backpropagation through time: what it does and how to do it},
+  author  = {Werbos, Paul J.},
+  journal = {Proceedings of the IEEE},
+  volume  = {78},
+  number  = {10},
+  pages   = {1550--1560},
+  year    = {1990},
+}
+
+@incollection{prechelt1998early,
+  title     = {Early stopping---but when?},
+  author    = {Prechelt, Lutz},
+  booktitle = {Neural Networks: Tricks of the Trade},
+  editor    = {Orr, Genevieve B. and M{\"u}ller, Klaus-Robert},
+  pages     = {55--69},
+  publisher = {Springer},
+  year      = {1998},
+}
+
+@article{williams1989learning,
+  title   = {A learning algorithm for continually running fully recurrent neural networks},
+  author  = {Williams, Ronald J. and Zipser, David},
+  journal = {Neural Computation},
+  volume  = {1},
+  number  = {2},
+  pages   = {270--280},
+  year    = {1989},
+}
+
+@article{sobel1968isotropic,
+  title   = {A 3x3 isotropic gradient operator for image processing},
+  author  = {Sobel, Irwin and Feldman, Gary},
+  journal = {A Critical Review of Early Gradient Operators},
+  year    = {1968},
+}
+
+@inproceedings{milletari2016v,
+  title     = {V-Net: Fully Convolutional Neural Networks for Volumetric Medical Image Segmentation},
+  author    = {Milletari, Fausto and Navab, Nassim and Ahmadi, Seyed-Ahmad},
+  booktitle = {2016 Fourth International Conference on 3D Vision (3DV)},
+  pages     = {79--87},
+  year      = {2016},
+  publisher = {IEEE},
+}
+
+@article{turing1952chemical,
+  title   = {The Chemical Basis of Morphogenesis},
+  author  = {Turing, Alan Mathison},
+  journal = {Philosophical Transactions of the Royal Society of London. Series B, Biological Sciences},
+  volume  = {237},
+  number  = {641},
+  pages   = {37--72},
+  year    = {1952},
+}
+
+@inproceedings{arjovsky2017wasserstein,
+  title     = {Wasserstein GAN},
+  author    = {Arjovsky, Martin and Chintala, Soumith and Bottou, L{\'e}on},
+  booktitle = {Proceedings of the 34th International Conference on Machine Learning},
+  pages     = {214--223},
+  year      = {2017},
+}
+
+@article{virtanen2020scipy,
+  title   = {{SciPy} 1.0: Fundamental Algorithms for Scientific Computing in Python},
+  author  = {Virtanen, Pauli and others},
+  journal = {Nature Methods},
+  volume  = {17},
+  pages   = {261--272},
+  year    = {2020},
+}
+
+@article{hunter2007matplotlib,
+  title   = {Matplotlib: A 2D Graphics Environment},
+  author  = {Hunter, John D.},
+  journal = {Computing in Science \& Engineering},
+  volume  = {9},
+  number  = {3},
+  pages   = {90--95},
+  doi     = {10.1109/MCSE.2007.55},
+  year    = {2007},
+}
+
+@misc{matplotlib_zenodo,
+  title        = {Matplotlib: Visualization with Python},
+  author       = {{Matplotlib Development Team}},
+  year         = {2025},
+  doi          = {10.5281/zenodo.592536},
+}
+
+@article{beaumont2002abc,
+  title   = {Approximate Bayesian Computation in Population Genetics},
+  author  = {Beaumont, Mark A. and Zhang, Wenyang and Balding, David J.},
+  journal = {Genetics},
+  volume  = {162},
+  number  = {4},
+  pages   = {2025--2035},
+  year    = {2002},
+}
+
+@book{sisson2018abc,
+  title     = {Handbook of Approximate Bayesian Computation},
+  editor    = {Sisson, Scott A. and Fan, Yanan and Beaumont, Mark},
+  publisher = {Chapman and Hall/CRC},
+  address   = {Boca Raton, FL},
+  year      = {2018},
 }

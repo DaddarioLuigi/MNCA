@@ -3,9 +3,8 @@
 \label{c:tools}
 %-------------------------------------------------------------------
 
-\epigraph{\enquote{I believe that inside every tool is a hammer.}}{\emph{Adam Savage}}
-
 This chapter describes the software stack, code organisation, and execution environment used in this thesis.
+Together with \cref{c:implementation}, it forms the overall \emph{Materials and Methods} section: here we focus on tools and frameworks, while \cref{c:implementation} details the experimental setup.
 The aim is to give a precise and self-contained account of how the experiments are implemented and how they can be reproduced.
 
 %----------------------------------------------------------
@@ -15,8 +14,8 @@ The aim is to give a precise and self-contained account of how the experiments a
 All experiments are implemented in Python.
 \Cref{tab:tools:stack} summarises the main libraries and their role.
 The core models (NCA, Mixture NCA, and their extended and stochastic variants) are implemented with \texttt{PyTorch}~\cite{pytorch}, which provides automatic differentiation and efficient GPU execution for the repeated unrolling of the learned dynamics.
-Numerical arrays and data handling use \texttt{NumPy} and \texttt{pandas}; visualisation uses \texttt{matplotlib}, \texttt{seaborn}, and \texttt{plotly} (the latter for interactive dashboards and for exporting static figures such as PNG or PDF).
-Dependency versions are pinned in \texttt{requirements.txt} at the project root (e.g.\ \texttt{torch>=2.0.0}, \texttt{numpy>=1.24.0}), so that a fresh environment can be reconstructed for reproducibility.
+Numerical arrays and data handling use \texttt{NumPy}~\cite{harris2020numpy} and \texttt{pandas}~\cite{reback2020pandas}; scientific routines and statistical tests (e.g.\ Kruskal--Wallis, Mann--Whitney) rely on \texttt{SciPy}~\cite{virtanen2020scipy}; visualisation uses \texttt{matplotlib}~\cite{hunter2007matplotlib,matplotlib_zenodo}, \texttt{seaborn}, and \texttt{plotly} (the latter for interactive dashboards and for exporting static figures such as PNG or PDF).
+Dependency versions are specified in \texttt{requirements.txt} at the project root (e.g.\ \texttt{torch>=2.0.0}, \texttt{numpy>=1.24.0}), so that a fresh environment can be reconstructed for reproducibility.
 
 Model training and evaluation are run from the command line via dedicated scripts; the results reported in this thesis are produced by these same pipelines.
 
@@ -30,6 +29,7 @@ Model training and evaluation are run from the command line via dedicated script
     \hline
     PyTorch & Model implementation, automatic differentiation, GPU execution \\
     NumPy, pandas & Arrays, data handling, metrics aggregation \\
+    SciPy & Scientific computing, statistical tests \\
     matplotlib, seaborn, plotly & Plotting, dashboards, static figure export \\
     tqdm, loguru & Progress bars and logging \\
     \hline
@@ -62,13 +62,13 @@ The repository is structured around a small number of components.
 \paragraph{Models (\texttt{mix\_NCA/}).}
 The package contains the NCA and mixture-based models: \texttt{NCA.py}, \texttt{MixtureNCA.py}, and the extended variants \texttt{ExtendedNCA.py}, \texttt{ExtendedMixtureNCA.py}, \texttt{ExtendedMixtureNCANoise.py} (configurable neighbourhood size, stochastic rule selection, noise).
 The tissue simulator in \texttt{TissueModel.py} defines the cell types (\texttt{ComplexCellType}: EMPTY, STEM, INTERMEDIATE\_1/2, DIFFERENTIATED\_1/2), the local update rules (death, survival, division, differentiation), and the \texttt{simulate} method.
-\texttt{BiologicalMetrics.py} implements the comparison of generated vs.\ ground-truth distributions (KL divergence, chi-square, categorical MMD, tumour size, border size, spatial variance).
+\texttt{BiologicalMetrics.py} implements the comparison of generated vs.\ ground-truth distributions (KL divergence, chi-square, categorical MMD~\cite{gretton2012mmd}, tumour size, border size, spatial variance).
 Training utilities (grid-to-channels conversion, \texttt{train\_nca\_dyn}, classification update network) are in \texttt{utils\_simulations.py}.
 
 \paragraph{Data generation.}
 Tissue histories are produced by the data-generation script at the project root.
-The script instantiates the complex tissue model via \mbox{\texttt{TissueModel.create\_complex\_model\_example}} with a random number of initial stem cells per run, simulates each trajectory for a fixed number of steps, and saves the list of histories as a single \texttt{.npy} file.
-\Cref{tab:tools:genhist} lists the script arguments; \Cref{tab:tools:dataset} specifies the dataset used for the main neighbourhood-size sweep in this thesis (see \cref{c:implementation}).
+The script instantiates the complex tissue model via the function \verb|create_complex_model_example| (in \texttt{TissueModel.py}) with a random number of initial stem cells per run, simulates each trajectory for a fixed number of steps, and saves the list of histories as a single \texttt{.npy} file.
+\Cref{tab:tools:genhist} lists the script arguments; \Cref{tab:tools:dataset} and \cref{tab:tools:dataset_curriculum} specify the two history datasets used in the main synthetic experiments of this thesis (Step~3 controlled sweep and the curriculum experiment; see \cref{c:implementation}).
 
 \begin{table}[htbp]
   \centering
@@ -88,8 +88,23 @@ The script instantiates the complex tissue model via \mbox{\texttt{TissueModel.c
 
 \begin{table}[htbp]
   \centering
-  \caption{Dataset used for the main neighbourhood-size sweep in this thesis.}
+  \caption{Dataset used for the Step~3 controlled neighbourhood-size sweep (results in \cref{sec:results:neighborhood}).}
   \label{tab:tools:dataset}
+  \begin{tabular}{@{}ll@{}}
+    \hline
+    \textbf{Parameter} & \textbf{Value} \\
+    \hline
+    Number of histories & 300 \\
+    Steps per history & 100 \\
+    Reproducibility & Fixed \texttt{--seed} when required \\
+    \hline
+  \end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+  \centering
+  \caption{Dataset used for the curriculum learning experiment (results in \cref{sec:results:stochasticity}).}
+  \label{tab:tools:dataset_curriculum}
   \begin{tabular}{@{}ll@{}}
     \hline
     \textbf{Parameter} & \textbf{Value} \\
@@ -116,7 +131,7 @@ After training, the script evaluates each model at several rollout lengths (e.g.
       \hline
       \textbf{Argument} & \textbf{Default} & \textbf{Description} \\
       \hline
-      \texttt{--histories\_path} & \texttt{../notebooks/histories.npy} & Path to histories file (\texttt{.npy}) \\
+      \texttt{--histories\_path} & \texttt{histories.npy} & Path to histories file (\texttt{.npy}) \\
       \texttt{--output\_dir} & \texttt{results\_extended} & Root directory for all outputs \\
       \texttt{--neighborhood\_sizes} & \texttt{3,4,5,6,7} & Comma-separated list of sizes \\
       \texttt{--curriculum} & \texttt{off} & Enable curriculum learning \\
@@ -155,7 +170,7 @@ They assume the directory layout in \Cref{tab:tools:outputs} and are documented 
 \section{Reproducibility and artifacts}
 %----------------------------------------------------------
 
-Reproducibility is supported at three levels (\Cref{tab:tools:repro}).
+Reproducibility is supported at three levels (\Cref{tab:tools:repro}), in line with the general FAIR principles~\cite{wilkinson2016fair} for scientific data and software (Findable, Accessible, Interoperable, Reusable).
 
 \begin{table}[htbp]
   \centering

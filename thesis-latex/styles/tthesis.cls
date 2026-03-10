@@ -32,11 +32,11 @@
 \usepackage{booktabs}
 \usepackage{tabulary}
 
-% citations at the beginning of each chapter
-\usepackage{epigraph}
-	\setlength{\epigraphwidth}{0.59\textwidth}
-	\renewcommand{\epigraphsize}{\small}
-	\renewcommand{\epigraphflush}{flushleft}
+% citations at the beginning of each chapter (epigraphs removed)
+%\usepackage{epigraph}
+%	\setlength{\epigraphwidth}{0.59\textwidth}
+%	\renewcommand{\epigraphsize}{\small}
+%	\renewcommand{\epigraphflush}{flushleft}
 
 \usepackage{styles/reallyblank} % insert empty page at the beginning of a chapter with empty headings
 
@@ -60,6 +60,8 @@
 \usepackage{wasysym}
 \usepackage{amsfonts}
 \usepackage{graphicx}
+
+\usepackage{qrcode}
 
 \usepackage{verbatim}
 \usepackage{courier}

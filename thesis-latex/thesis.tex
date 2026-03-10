@@ -1,12 +1,18 @@
 \documentclass{styles/tthesis}
+\usepackage{cite}
 
 \newcommand{\dspic}{dsPIC$^{\text{\textregistered}}$ DSC}
 \newcommand{\dcbus}{DC-BUS\texttrademark }
 
+\newif\ifwithqrcode
+% Imposta a true per la versione con QR code,
+% a false per la versione senza QR code.
+\withqrcodetrue
+
 % change the reference to the desired frontpage
 \renewcommand{\frontpagefile}{frontpages/frontpage-ai4st.inc}
 
-\title{Assessing Mixture Neural Cellular Automata for Biological Systems}
+\title{Comprehensive assessment of MNCA for modelling complex biological systems}
 \author{Luigi Daddario}
 \renewcommand{\regnumber}{908294}
 \graduation{Master's Degree in Artificial Intelligence for Science and Technology}
@@ -14,7 +20,7 @@
 \supervisor{
 Prof. Paolo Napoletano \\
 Co-supervisor: \\
-Dr. Alex Graudenzi \\
+Alex Graudenzi \\
 }
 
 %-------------------------------------------------------------------
@@ -34,27 +40,24 @@ Dr. Alex Graudenzi \\
 
 \input{abstract.inc}
 
+%-------------------------------------------------------------------
+% Dedication / Epigraph
+%-------------------------------------------------------------------
 \chapter*{\mbox{}}
-
 \begin{flushright}
 \thispagestyle{empty}
 \null\vspace*{\stretch{1}}
-{\it Here you can write whatever you want
+{\it ``Nothing is as practical as a good theory.''}
 
 \vspace{10pt}
-and here too.
-}
+--- Kurt Lewin
 \vspace{\stretch{2}}\null
 \end{flushright}
-%
-\thispagestyle{empty}
-\mbox{}
 \newpage
 
 %-------------------------------------------------------------------
 % Acknowledgments
 %-------------------------------------------------------------------
-
 \input{acknowledgments.inc}
 
 %-------------------------------------------------------------------
@@ -67,7 +70,6 @@ and here too.
 
 \mainmatter
 
-\input{chapter_acronyms.inc}
 \input{chapter_intro.inc}
 \input{chapter_sota.inc}
 \input{chapter_tools.inc}
@@ -82,7 +84,7 @@ and here too.
 % Bibliography
 %-------------------------------------------------------------------
 
-\bibliographystyle{plain}
+\bibliographystyle{unsrt}
 \bibliography{biblio}
 
 \end{document}

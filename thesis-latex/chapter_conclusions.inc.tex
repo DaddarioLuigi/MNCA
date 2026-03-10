@@ -3,26 +3,58 @@
 \label{c:conc}
 %-------------------------------------------------------------------
 
-\epigraph{\enquote{Computer Science is no more about computers than astronomy is about telescopes.}}{\emph{E. W. Dijkstra}}
+This thesis investigated the behaviour of \textbf{Mixture Neural Cellular Automata (MNCA)} for modelling tissue-like dynamics, with particular emphasis on how the \textbf{spatial neighbourhood size} and stochasticity affect \textbf{free-rollout} stability.
+Across a controlled neighbourhood sweep (Step~3) and a longer-horizon curriculum experiment, we find that once a minimal receptive field is reached (\(NB\ge2\)), the effect of \(NB\) is \textbf{non-monotonic} and depends on both the metric family (distributional vs.\ spatial) and the rollout horizon used for evaluation.
 
-This chapter summarizes the conclusions of the work and outlines limitations and possible extensions.
-
-\section{Summary and limitations}
+\section{Summary and contributions}
 \label{sec:conc:summary}
 
-The thesis showed that the spatial neighborhood size \(NB\) in Mixture NCA has a measurable impact on long-horizon tissue-like dynamics: \(NB=1\) is inadequate, while \(NB \ge 2\) yields a clear improvement; beyond that, the ``best'' \(NB\) depends on the metric and the model (Mixture vs.\ Stochastic Mixture).
-The main threats to validity are summarized in \cref{sec:impl:threats}: dependence on the synthetic simulator and dataset size, the limited range of \(NB\) explored, and the absence of validation-based model selection in the curriculum experiment.
-These caveats do not invalidate the core finding---that neighborhood size matters and that a controlled protocol is needed to observe it---but they bound the generality of the conclusions.
+A central result of this study is that the \textbf{spatial neighbourhood size is a key determinant of model performance}.
+With minimal context (\(NB=1\)) the model is inadequate; for \(NB \ge 2\), the relationship between neighbourhood size and performance is not monotonic.
+Performance does not simply improve as the receptive field grows. MNCA models show different trade-offs between global distributional accuracy and spatial structure, depending on the neighbourhood configuration, so spatial context must be chosen carefully for the modelling objective and the evaluation horizon.
 
-\section{Promising directions for future work}
+The thesis also demonstrates the importance of \textbf{stochasticity in long-horizon simulations}.
+The stochastic MNCA variant tends to produce more reliable results in free-rollout settings, particularly with respect to distributional metrics and global system behaviour.
+This suggests that controlled randomness may help prevent deterministic drift and improve the robustness of emergent dynamics over time.
+At the same time, deterministic models can still do better at preserving sharp spatial structures in some cases. So the choice between deterministic and stochastic formulations depends on whether one prioritises stability or structural precision.
+
+Another important contribution concerns the \textbf{evaluation methodology}.
+The study shows that how we train and evaluate the models strongly affects how we interpret their performance.
+In particular, evaluating models under free rollout reveals long-term errors that remain hidden under teacher-forcing conditions.
+This finding emphasizes that training objectives and evaluation strategies must be aligned with the intended deployment scenario.
+Without such alignment, hyperparameter effects (such as those related to neighbourhood size) may be obscured by broader instability or exposure bias.
+
+The application to microscopy-style segmentation (\cref{sec:results:bbbc031}) shows that MNCA can be trained on a public synthetic cell-imaging benchmark (BBBC031); that experiment uses in-sample evaluation (each model is evaluated on the same image it was trained on) and does not assess generalisation to new images.
+However, these experiments also reveal practical challenges, especially in optimizing models with large neighbourhoods.
+Training stability, learning-rate scheduling, and optimisation time significantly influence performance, indicating that computational considerations play an important role when applying MNCA to image-based benchmarks.
+
+Taken together, these results support MNCA as a flexible framework for modelling spatially distributed systems, while highlighting that neighbourhood size, stochasticity, and the evaluation protocol jointly determine whether rollouts remain stable at long horizons.
+The results clarify how local interaction rules, stochastic mechanisms, and training strategies interact to produce complex emergent behaviour.
+A plausible interpretation of why neighbourhood size matters is that it controls how much spatial context each cell receives: too little context can prevent the rule from capturing boundary and coordination effects, while very large neighbourhoods increase the number of parameters and the risk of overfitting or optimisation instability, without a proportional gain when the underlying dynamics are largely local.
+The analysis of rule-selection statistics further shows that \textbf{rule specialization is not a linear predictor of dynamic divergence}: KL divergence becomes extreme mainly in the strongly constrained regime (\(NB=1\)), while for \(NB\ge2\) more mixed rule usage can coincide with stable dynamics and low KL.
+At the same time, the work highlights several open challenges, including exposure bias in long-horizon predictions, optimisation difficulties with large receptive fields, and the need for evaluation protocols that reflect realistic usage conditions.
+
+\section{Limitations}
+\label{sec:conc:limitations}
+
+This thesis is primarily an experimental and methodological study within machine learning; it does not claim to provide deep biological validation of the learned dynamics.
+The synthetic simulator is deliberately simplified (fixed cell types, hand-crafted differentiation rules, small grid) and is intended to produce tractable, controllable trajectories for training and evaluation rather than to mimic a specific biological system.
+Comparison with real morphogenetic data or with established biological models is limited to the BBBC031 segmentation task, which uses synthetic cell imagery and demonstrates that MNCA can be trained on image-based segmentation from seeds (in-sample per-image fitting) but does not assess generalisation to new images or biological plausibility of the learned rules.
+The discussion of why neighbourhood size affects performance is interpretive: we report empirical trade-offs and suggest possible mechanisms (information flow, stability), but a full theoretical characterisation would require further work.
+
+\section{Future research}
 \label{sec:conc:future}
 
-Several directions could strengthen or extend this work:
-\begin{itemize}
-  \item \textbf{Longer training on long windows:} train for more epochs on 500-step windows (or add further curriculum phases) to reduce the gap between generated and ground-truth trajectories at long horizons.
-  \item \textbf{Validation loss and early stopping:} compute a validation loss using free rollouts and use it for early stopping, so that optimization is aligned with the evaluation regime.
-  \item \textbf{Final-state and trajectory-level losses:} add losses that directly reward how close the final state of a rollout is to the ground truth (e.g., distribution of cell types), or that penalize drift over the full trajectory.
-  \item \textbf{Scheduled teacher forcing:} gradually reduce the fraction of steps where the true state is fed during training, so that the model learns to correct its own errors and exposure bias is mitigated.
-  \item \textbf{Evaluation with multiple rollouts:} for the stochastic model, run several rollouts per initial condition and report averaged or best-of-\(k\) metrics to better capture typical behavior.
-\end{itemize}
-We leave these ideas for future work; the current experiments already establish that the neighborhood-size effect is real and carries over to the long-horizon curriculum setting.
+Future work should improve training strategies that directly optimise long-term behaviour, refine curriculum learning, and develop more robust optimisation for models with larger spatial context.
+On BBBC031, the high MSE for \(NB=7\) (even after re-training) suggests that training protocols for larger neighbourhoods deserve more attention (e.g., curriculum, longer runs, or adaptive schedules).
+More validation on diverse biological datasets and tasks is also needed to assess how well MNCA models generalise and how useful they can be in computational biology and biomedical imaging.
+
+Another promising direction is to place NCAs on more general topological domains, linking them to recent work in topological deep learning~\cite{tdl_hajij2023,topox_hajij2024}.
+This could make it possible to extend mixture-based NCAs beyond regular grids to settings where interactions are naturally described by higher-order structures (e.g.\ cell or simplicial complexes).
+
+\section*{Code availability}
+
+All experiments reported in this thesis were run using the \texttt{MNCA} codebase, which includes the tissue simulator, MNCA models, training and evaluation scripts, and the Streamlit dashboard.
+The complete repository is stored in the Git version control system associated with this work and can be shared alongside the thesis upon request or via a public hosting service (e.g.\ GitHub).
+
+Overall, the work provides a reproducible experimental basis and a set of evaluation practices for studying learning-based cellular automata as generative models of spatial dynamics.

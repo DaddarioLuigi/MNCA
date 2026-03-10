@@ -3,21 +3,23 @@
 \label{c:intro}
 %-------------------------------------------------------------------
 
-\epigraph{\enquote{A design of any kind shows its real value when taken beyond its original limits.}}{\emph{Tom Jennings}}
-
 %-------------------------------------------------------------------
 \section{Context and motivation}
 \label{sec:intro:context}
 %-------------------------------------------------------------------
 
-Tissues and other multicellular structures arise from the repeated application of local rules: cells divide, differentiate, migrate, and respond to signals from their immediate neighborhood.
+Tissues and other multicellular structures arise from the repeated application of local rules: cells divide, differentiate, migrate, and respond to signals from their immediate neighbourhood.
 No single cell holds a global blueprint; instead, large-scale morphology and function emerge from many spatially distributed, short-range interactions.
-Understanding how such local rules give rise to stable patterns and robust growth is a central question in developmental and systems biology, and it has motivated a long tradition of computational models that emphasize locality and discreteness \cite{ca_vonneumann1966}.
+A central question in developmental and systems biology is how such local rules give rise to stable patterns and robust growth. This has led to a long tradition of computational models that emphasise locality and discreteness \cite{ca_vonneumann1966}.
 
 This thesis focuses on a class of such models: neural cellular automata \cite{nca_mordvintsev2020} trained to imitate tissue-like dynamics.
-We are interested in whether these models can not only reproduce short-term transitions from data but also maintain coherent, biologically plausible behavior when run autonomously over long horizons.
-In that setting, the choice of how much spatial context each cell uses---the size of its ``neighborhood''---becomes a key design factor.
-We therefore assess Mixture Neural Cellular Automata (MNCA) \cite{mnca_milite2025} in a controlled tissue-growth scenario and ask whether enlarging the neighborhood improves learning and long-horizon stability.
+We ask whether these models can both reproduce short-term transitions from data and maintain coherent, biologically plausible behaviour when run autonomously over long horizons.
+In that setting, the choice of how much spatial context each cell uses (the size of its ``neighbourhood'') becomes a key design factor.
+We therefore assess Mixture Neural Cellular Automata (MNCA) \cite{mnca_milite2025} in a controlled tissue-growth scenario and ask whether enlarging the neighbourhood improves learning and long-horizon stability.
+
+From a data point of view, the \emph{input} to the MNCA is a discrete grid representing a tissue state at a given time (cell types on a lattice), and the \emph{output} is the next grid obtained by applying the learned local rule everywhere.
+Training uses pairs (or short windows) of consecutive tissue states from a simulator as supervision; deployment consists of iterating the learned rule from an initial condition to generate a full trajectory.
+The central question is therefore whether one can learn a local update rule that, when repeatedly applied to realistic initial conditions, reproduces the distribution of tissue-like histories observed in the data.
 
 %-------------------------------------------------------------------
 \section{Why cellular automata and neural cellular automata}
@@ -28,23 +30,25 @@ Cellular automata (CA) \cite{ca_vonneumann1966} provide one of the simplest fram
 They have been used for decades to model physical, chemical, and biological phenomena, from pattern formation to morphogenesis, without requiring continuous equations or global coordination.
 This makes them a natural fit when the phenomenon of interest is inherently local and when interpretability and parsimony matter.
 
-Neural cellular automata (NCA) \cite{nca_mordvintsev2020} retain the same spatial structure and locality but replace the hand-crafted update rule with a learned one, typically a small neural network that takes the local neighborhood as input.
+Neural cellular automata (NCA) \cite{nca_mordvintsev2020} retain the same spatial structure and locality but replace the hand-crafted update rule with a learned one, typically a small neural network that takes the local neighbourhood as input.
 Thus, one keeps the inductive bias of ``local rules only'' while gaining the flexibility to discover dynamics from data.
 Mixture variants \cite{mnca_milite2025} go a step further by combining several learned rules with stochasticity, which is well suited to biological systems where variability and multiple cell behaviors are the norm.
 
 An alternative would be to model the same dynamics with generic deep learning: for example, a convolutional or recurrent network that maps full grid states across time.
 Such models can be powerful, but they do not enforce locality by design; the effective receptive field and the way information propagates are less transparent, and long-horizon rollout often suffers from drift or instability.
 By contrast, CA and NCA explicitly encode the prior that only nearby cells influence each other, which aligns with the biological picture and can improve generalization and stability when the training signal is limited or noisy.
-In short, we use cellular automata and neural cellular automata not instead of machine learning, but as a structured, spatially grounded class of models within it---one that trades some flexibility for interpretability, parsimony, and a bias that matches the problem.
+In short, we treat cellular automata and neural cellular automata as a structured, spatially grounded class of models within machine learning. This class trades some flexibility for interpretability, parsimony, and a bias that matches the problem.
+From a computational perspective, MNCA can be seen as a learnable \emph{spatio-temporal simulator}: a data scientist provides trajectories of tissue states as input, and the model learns a local transition rule that can be rolled out to produce new trajectories.
+The aim in this thesis is to understand when such a model can be trusted to generate long-horizon behaviour that remains close to biologically motivated ground truth, and how the neighbourhood size influences this capability.
 
 %-------------------------------------------------------------------
 \section{Objectives of the thesis}
 \label{sec:intro:objectives}
 %-------------------------------------------------------------------
 
-The main objective of this thesis is to evaluate Mixture Neural Cellular Automata in a tissue-growth setting and to determine whether extending the spatial neighborhood improves their ability to learn and to maintain plausible dynamics over long rollouts.
+The main objective of this thesis is to evaluate Mixture Neural Cellular Automata in a tissue-growth setting and to see whether using a larger spatial neighbourhood helps them learn better and keep plausible dynamics over long rollouts.
 To that end, we design a sequence of experiments that progressively refine the training setup and the evaluation protocol.
-We compare multiple neighborhood sizes using both qualitative inspection of rollouts and quantitative metrics, and we discuss how the choice of neighborhood interacts with other factors such as curriculum design and evaluation horizon.
+We compare multiple neighbourhood sizes using both qualitative inspection of rollouts and quantitative metrics, and we discuss how the choice of neighbourhood interacts with other factors such as curriculum design and evaluation horizon.
 A secondary aim is to provide a reproducible experimental pipeline and a clear reporting of results, so that the findings can be extended or challenged in future work.
 
 %-------------------------------------------------------------------
@@ -54,6 +58,6 @@ A secondary aim is to provide a reproducible experimental pipeline and a clear r
 
 \Cref{c:sota} reviews the state of the art on cellular automata, neural cellular automata, and mixture-based extensions.
 \Cref{c:tools} describes the software stack and the organization of the codebase used for the experiments.
-\Cref{c:implementation} details the implementation of the experiments: the synthetic biological simulator, the training and evaluation pipeline, and the design of the neighborhood-size sweep.
+\Cref{c:implementation} details the implementation of the experiments: the synthetic biological simulator, the training and evaluation pipeline, and the design of the neighbourhood-size sweep.
 \Cref{c:results} summarizes the main findings and their implications.
 \Cref{c:conc} draws conclusions and outlines possible directions for future work.

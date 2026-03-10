@@ -5,22 +5,22 @@
 \small
 \begin{tabulary}{\textwidth}{lLrLL}
 \toprule
-Model & Metric & Kruskal--Wallis $p$ & Significant vs NB=2 & Significant vs NB=3 \\
+Model & Metric & Kruskal-Wallis $p$ & Significant vs NB=2 & Significant vs NB=3 \\
 \midrule
 Mixture~NCA & KL Divergence & $<10^{-4}$ & 3,4,5,6,7 & 4,5,6,7 \\
 Mixture~NCA & Chi-Square & $<10^{-4}$ & 3,4,5,6,7 & 4,5,6,7 \\
 Mixture~NCA & Categorical MMD & $<10^{-4}$ & 3,4,5,6,7 & 4,5,6 \\
-Mixture~NCA & Tumor Size Diff & $<10^{-4}$ & 3,4,5,6,7 & 4,5,6,7 \\
+Mixture~NCA & Tumour Size Diff & $<10^{-4}$ & 3,4,5,6,7 & 4,5,6,7 \\
 Mixture~NCA & Border Size Diff & $<10^{-4}$ & 3,4,5,6,7 & 4,5,6,7 \\
 Mixture~NCA & Spatial Variance Diff & $<10^{-4}$ & 3,4,5,6,7 & 4,5,6,7 \\
 Stochastic~Mixture~NCA & KL Divergence & $<10^{-4}$ & 3,4,5,6,7 & 4,5,6,7 \\
 Stochastic~Mixture~NCA & Chi-Square & $<10^{-4}$ & 3,4,5,6,7 & 4,5,6,7 \\
 Stochastic~Mixture~NCA & Categorical MMD & $<10^{-4}$ & 3,4,5,7 & 4,5,6,7 \\
-Stochastic~Mixture~NCA & Tumor Size Diff & $<10^{-4}$ & 3,4,5,7 & 4,5,6,7 \\
+Stochastic~Mixture~NCA & Tumour Size Diff & $<10^{-4}$ & 3,4,5,7 & 4,5,6,7 \\
 Stochastic~Mixture~NCA & Border Size Diff & $<10^{-4}$ & 4,5,6,7 & 4,5,6,7 \\
 Stochastic~Mixture~NCA & Spatial Variance Diff & $<10^{-4}$ & 3,4,5,6,7 & 4,5,7 \\
 \bottomrule
 \end{tabulary}
-\caption{Non-parametric statistical tests across neighborhood sizes for Step Length $=100$. We report Kruskal--Wallis across $NB\in\{1,\dots,7\}$ and post-hoc Mann--Whitney U with Holm correction: each $NB>2$ is compared to the baseline $NB=2$, and each $NB>3$ to the baseline $NB=3$. Columns list which neighborhood sizes differ significantly from each baseline.}
+\caption{Non-parametric statistical tests across neighbourhood sizes for Step Length $=100$. \textbf{Legend:} Model = Mixture NCA or Stochastic Mixture NCA; Metric = one of the six metrics; Kruskal-Wallis $p$ over $NB\in\{1,\dots,7\}$; last two columns = list of $NB$ that differ significantly from baseline $NB=2$ (post-hoc Mann-Whitney U, Holm correction) and from baseline $NB=3$.}
 \label{tab:impl:step3:stats}
 \end{table}

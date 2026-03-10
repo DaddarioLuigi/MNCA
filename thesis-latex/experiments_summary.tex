@@ -30,7 +30,7 @@
 \section{Introduction}
 %-------------------------------------------------------------------
 
-We ask whether increasing the neighborhood size \(NB\) in Mixture Neural Cellular Automata (MNCA) improves long-horizon behaviour in a tissue-growth setup. Experiments are run as a sequence of controlled studies. The main one is Step~3: we train models with \(NB \in \{1,\dots,7\}\) on 300 trajectories of 100 steps and evaluate at rollout lengths 25, 50, and 100.
+We ask whether increasing the neighbourhood size \(NB\) in Mixture Neural Cellular Automata (MNCA) improves long-horizon behaviour in a tissue-growth setup. Experiments are run as a sequence of controlled studies. The main one is Step~3: we train models with \(NB \in \{1,\dots,7\}\) on 300 trajectories of 100 steps and evaluate at rollout lengths 25, 50, and 100.
 
 %-------------------------------------------------------------------
 \section{Why Step~3}
@@ -55,11 +55,11 @@ We use six metrics on the final state of each run. All are ``lower is better''. 
 
 \paragraph{Chi-square.} \emph{Data and distributions:} exactly the same as for KL: the two probability vectors over cell types from the pooled true and pooled generated cells. \emph{Metric:} \(\sum (p-q)^2/(p+q)\). Same level of information as KL (global cell-type proportions only).
 
-\paragraph{Categorical MMD.} \emph{Data:} the \(N\) true grids and the \(N\) generated grids, each kept as a full 2D pattern (we do not pool or aggregate). So each ``point'' is one entire grid. \emph{No distribution over simulations:} we do not build an empirical distribution of a scalar; we compare two sets of objects. \emph{Metric:} we use a kernel that, given two grids, counts how often the cell type matches position by position, and we form the usual MMD: \(\mathrm{mean}(k_{\mathrm{true,true}}) + \mathrm{mean}(k_{\mathrm{gen,gen}}) - 2\,\mathrm{mean}(k_{\mathrm{true,gen}})\). So we measure how similar the spatial layouts of cell types are between the two sets of grids, using the full pattern of each grid.
+\paragraph{Categorical MMD.}~\cite{gretton2012mmd} \emph{Data:} the \(N\) true grids and the \(N\) generated grids, each kept as a full 2D pattern (we do not pool or aggregate). So each ``point'' is one entire grid. \emph{No distribution over simulations:} we do not build an empirical distribution of a scalar; we compare two sets of objects. \emph{Metric:} we use a kernel that, given two grids, counts how often the cell type matches position by position, and we form the usual MMD: \(\mathrm{mean}(k_{\mathrm{true,true}}) + \mathrm{mean}(k_{\mathrm{gen,gen}}) - 2\,\mathrm{mean}(k_{\mathrm{true,gen}})\). So we measure how similar the spatial layouts of cell types are between the two sets of grids, using the full pattern of each grid.
 
-\paragraph{Tumor size difference.} \emph{Data:} for each simulation \(i\) we compute one number from the true grid (count of non-empty cells) and one from the generated grid (same quantity). So we have two lists of \(N\) numbers: \((\text{tumor size of true grid}_1,\dots)\) and \((\text{tumor size of generated grid}_1,\dots)\). \emph{Distributions:} we treat each list as an empirical distribution over the \(N\) simulations. So ``true distribution'' = the empirical distribution of tumor size across the \(N\) true grids; ``generated distribution'' = the empirical distribution of tumor size across the \(N\) generated grids. \emph{Metric:} Wasserstein distance between these two empirical distributions, normalized by the mean of the true tumor sizes. So we ask whether the spread of total cell counts over simulations in the generated set is similar to that in the true set.
+\paragraph{Tumour size difference.} \emph{Data:} for each simulation \(i\) we compute one number from the true grid (count of non-empty cells) and one from the generated grid (same quantity). So we have two lists of \(N\) numbers: \((\text{tumour size of true grid}_1,\dots)\) and \((\text{tumour size of generated grid}_1,\dots)\). \emph{Distributions:} we treat each list as an empirical distribution over the \(N\) simulations. So ``true distribution'' = the empirical distribution of tumour size across the \(N\) true grids; ``generated distribution'' = the empirical distribution of tumour size across the \(N\) generated grids. \emph{Metric:} Wasserstein distance between these two empirical distributions, normalized by the mean of the true tumour sizes. So we ask whether the spread of total cell counts over simulations in the generated set is similar to that in the true set.
 
-\paragraph{Border size difference.} \emph{Data:} for each grid we compute ``border size'' (see below); so we get one number per true grid and one per generated grid, i.e.\ two lists of \(N\) numbers. \emph{Distributions:} again, the empirical distributions of these \(N\) values for true and for generated. \emph{Metric:} Wasserstein distance between these two distributions, normalized by the mean true border size. Border size itself is computed per grid as follows: we build a binary mask (1 where there is any non-empty cell, 0 at EMPTY), apply a 3\(\times\)3 edge-detection kernel (Laplacian-like), and count pixels with strong response---that is the length of the tissue--empty interface for that grid. So we compare the distribution of ``perimeter length'' over the \(N\) simulations.
+\paragraph{Border size difference.} \emph{Data:} for each grid we compute ``border size'' (see below); so we get one number per true grid and one per generated grid, i.e.\ two lists of \(N\) numbers. \emph{Distributions:} again, the empirical distributions of these \(N\) values for true and for generated. \emph{Metric:} Wasserstein distance between these two distributions, normalized by the mean true border size. Border size itself is computed per grid as follows: we build a binary mask (1 where there is any non-empty cell, 0 at EMPTY), apply a 3\(\times\)3 edge-detection kernel (Laplacian-like), and count pixels with strong response; that is the length of the tissue-empty interface for that grid. So we compare the distribution of ``perimeter length'' over the \(N\) simulations.
 
 \paragraph{Spatial variance difference.} \emph{Data:} for each grid we compute ``spatial variance'' (see below), giving two lists of \(N\) numbers. \emph{Distributions:} the empirical distributions of these \(N\) values for true and for generated. \emph{Metric:} Wasserstein distance between these two distributions, normalized by the mean true spatial variance. Spatial variance per grid is: take the positions of all non-empty cells, compute their centre of mass, then the mean squared distance of those cells from that centre. So we compare the distribution of ``spread around the centre'' over the \(N\) simulations.
 
@@ -77,7 +77,7 @@ We use six metrics on the final state of each run. All are ``lower is better''. 
   \label{fig:dashboard}
 \end{figure}
 
-\textbf{Interpretation.} \(NB=1\) is clearly worse than \(NB\ge2\); moving from 1 to 2 gives a big gain. For \(NB\ge2\), scores do not keep improving as \(NB\) grows. The best \(NB\) depends on the metric and on rollout length. Mixture and Stochastic Mixture can behave differently. Distribution metrics (KL, Chi-square, MMD) and spatial ones (tumor size, border, variance) often tell a similar story for \(NB=1\) vs.\ \(NB\ge2\), but they can disagree on which \(NB\ge2\) is best---e.g.\ one \(NB\) can match global cell-type counts well while another fits border shape better.
+\textbf{Interpretation.} \(NB=1\) is clearly worse than \(NB\ge2\); moving from 1 to 2 gives a big gain. For \(NB\ge2\), scores do not keep improving as \(NB\) grows. The best \(NB\) depends on the metric and on rollout length. Mixture and Stochastic Mixture can behave differently. Distribution metrics (KL, Chi-square, MMD) and spatial ones (tumour size, border, variance) often tell a similar story for \(NB=1\) vs.\ \(NB\ge2\), but they can disagree on which \(NB\ge2\) is best (e.g.\ one \(NB\) can match global cell-type counts well while another fits border shape better).
 
 %-------------------------------------------------------------------
 \section{Per-simulation variability (violins)}
@@ -97,7 +97,7 @@ Averages can hide bad runs. Violin plots show the full distribution per \(NB\) a
 \begin{figure}[htbp]
   \centering
   \includegraphics[width=\textwidth]{figs/neighborhood_analysis/nb_sweep_300x100/violin_spatial_metrics.png}
-  \caption{Spatial metrics per run (tumor size, border size, spatial variance; lower is better).}
+  \caption{Spatial metrics per run (tumour size, border size, spatial variance; lower is better).}
   \label{fig:violin:spatial}
 \end{figure}
 
@@ -129,16 +129,16 @@ Bad-rate = share of runs whose metric is worse than the 95th percentile of the b
   \label{fig:badrate:kl}
 \end{figure}
 
-\textbf{Interpretation.} \(NB=1\) has high bad-rate; \(NB\ge2\) lowers it. Some \(NB\ge2\) still have high bad-rate at certain step lengths. So even when the mean KL looks good, a non-negligible share of runs can still end up with wrong cell-type distributions---the bars show which \(NB\) and which step length reduce that share the most.
+\textbf{Interpretation.} \(NB=1\) has high bad-rate, but robustness beyond that is not monotonic: some intermediate neighborhoods can still have high bad-rate at certain step lengths. So even when the mean KL looks good, a non-negligible share of runs can still end up with wrong cell-type distributions; the bars show which \(NB\) and which step length reduce that share the most.
 
 \begin{figure}[htbp]
   \centering
   \includegraphics[width=\textwidth]{figs/neighborhood_analysis/nb_sweep_300x100/badrate_bars_Tumor_Size_Diff.png}
-  \caption{Bad-rate for tumor size (lower is better).}
+  \caption{Bad-rate for tumour size (lower is better).}
   \label{fig:badrate:tumor}
 \end{figure}
 
-\textbf{Interpretation.} Bad-rate drops from \(NB=1\) to \(NB\ge2\). For the stochastic model, larger \(NB\) often reduces it further. Tumor size bad-rate is about getting the overall mass right; when it is high, many runs end up with too small or too large a ``tumor'', and the plot shows which \(NB\) fix that.
+\textbf{Interpretation.} Bad-rate drops when moving away from \(NB=1\), but the dependence on \(NB\) is non-monotonic and varies with step length and model type: some intermediate neighbourhoods can show elevated tail risk. Tumour size bad-rate is about getting the overall mass right; when it is high, many runs end up with too small or too large a ``tumour'', and the plot shows which \(NB\) mitigate that.
 
 \begin{figure}[htbp]
   \centering
@@ -156,7 +156,7 @@ Bad-rate = share of runs whose metric is worse than the 95th percentile of the b
   \label{fig:badrate:spvar}
 \end{figure}
 
-\textbf{Interpretation.} Spatial variance is sensitive to \(NB\) and horizon. Looking at both the center and the tails helps see when larger \(NB\) helps. Spatial variance bad-rate picks up runs where the local variability of the pattern (e.g.\ how mixed or segregated cell types are) is far from the target; the plot shows which \(NB\) and step lengths keep that under control.
+\textbf{Interpretation.} Spatial variance is sensitive to \(NB\) and horizon. Looking at both the center and the tails is essential because improvements in median performance do not necessarily imply improved robustness. Spatial variance bad-rate picks up runs where the local variability of the pattern (e.g.\ how mixed or segregated cell types are) is far from the target; the plot shows which \(NB\) and step lengths keep that under control.
 
 %-------------------------------------------------------------------
 \section{Compute and rule use}
@@ -192,6 +192,7 @@ Bad-rate = share of runs whose metric is worse than the 95th percentile of the b
 \end{figure}
 
 \textbf{Interpretation.} Entropy shows how the model picks rules over time. Larger \(NB\) can change this path and match the stability and metric differences we see across \(NB\). For example, some \(NB\) may show a fast drop in entropy (the model quickly commits to a few rules), while others keep entropy higher for longer; that can go together with more or fewer failure modes in the metrics.
+\emph{Importantly, the trajectories are not monotonic in \(NB\):} for some neighborhoods entropy increases over time while for others it decreases, so ``more specialization'' is not a uniform consequence of larger context.
 
 \subsection{Rule specialization summary}
 
@@ -202,7 +203,7 @@ Bad-rate = share of runs whose metric is worse than the 95th percentile of the b
   \label{fig:rule:summary}
 \end{figure}
 
-\textbf{Interpretation.} Rule use varies with \(NB\). More confident or more balanced rule use does not always give the best KL; it depends on metric and horizon. The panel that links entropy (or other specialization indices) to KL at step length 100 lets us check whether ``more specialized'' tends to mean ``better'' or not---often there is no single trend, which fits with the idea that different \(NB\) trade off distribution match and spatial structure in different ways.
+\textbf{Interpretation.} Rule use varies with \(NB\). More confident or more balanced rule use does not always give the best KL; it depends on metric and horizon. The panel that links entropy (or other specialization indices) to KL at step length 100 confirms that there is no single monotonic relation for \(NB\ge2\): KL is extreme mainly for the strongly constrained regime \(NB=1\), while higher-entropy (more mixed) configurations at \(NB=5\) or \(NB=7\) can still achieve very low KL. This fits with the idea that different \(NB\) trade off distribution match and spatial structure in different ways, and that mescolanza can be compatible with stable long-horizon dynamics.
 
 \subsection{Rule-assignment maps}
 
@@ -228,7 +229,7 @@ Bad-rate = share of runs whose metric is worse than the 95th percentile of the b
 \section{Statistical tests}
 %-------------------------------------------------------------------
 
-Metrics are heavy-tailed, so we use non-parametric tests: Kruskal--Wallis over all \(NB\), then Mann--Whitney U with Holm correction for two baselines---each \(NB>2\) vs.\ \(NB=2\), and each \(NB>3\) vs.\ \(NB=3\) (we do not compare against \(NB=1\), which is trivially inadequate).
+Metrics are heavy-tailed, so we use non-parametric tests: Kruskal-Wallis over all \(NB\), then Mann-Whitney U with Holm correction for two baselines: each \(NB>2\) vs.\ \(NB=2\), and each \(NB>3\) vs.\ \(NB=3\) (we do not compare against \(NB=1\), which is trivially inadequate).
 
 \begin{table}[htbp]
 \centering
@@ -258,7 +259,7 @@ Stochastic Mixture NCA & Spatial Variance Diff & $<10^{-4}$ & 3,4,5,6,7 & 4,5,7 
 \label{tab:stats}
 \end{table}
 
-\textbf{Interpretation.} The two baseline columns agree: the effect of \(NB\) is statistically significant. Compared to \(NB=2\), usually all of \(NB=3,4,5,6,7\) are significant (so even \(NB=3\) differs from the minimum); compared to \(NB=3\), we see which of \(NB=4,5,6,7\) differ from that reference---sometimes a subset (e.g.\ Categorical MMD or Spatial Variance) drops one of 6 or 7, meaning that larger \(NB\) is not always significantly better than \(NB=3\). The two baselines thus give a consistent and robust message: neighborhood size matters, and the ``best'' \(NB\) is metric- and model-dependent.
+\textbf{Interpretation.} The two baseline columns agree: the effect of \(NB\) is statistically significant. Compared to \(NB=2\), usually all of \(NB=3,4,5,6,7\) are significant (so even \(NB=3\) differs from the minimum); compared to \(NB=3\), we see which of \(NB=4,5,6,7\) differ from that reference; sometimes a subset (e.g.\ Categorical MMD or Spatial Variance) drops one of 6 or 7, meaning that larger \(NB\) is not always significantly better than \(NB=3\). The two baselines thus give a consistent and robust message: neighbourhood size matters, and the ``best'' \(NB\) is metric- and model-dependent.
 
 %-------------------------------------------------------------------
 \section{Conclusions}
